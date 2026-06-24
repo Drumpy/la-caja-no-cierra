@@ -9,17 +9,17 @@ export function createGame({ canvas, hudRoot }) {
   if (!hudRoot) throw new Error("createGame requires a HUD root");
 
   const runController = createRunController();
-  const scene = createScene(canvas, runController);
-  const hud = createDomHud(hudRoot, runController);
-  const ticket = createTicketOverlay(hudRoot, runController);
-  const notebook = createNotebookOverlay(hudRoot, runController);
+ const hud = createDomHud(hudRoot, runController);
+ const ticket = createTicketOverlay(hudRoot, runController);
+ const notebook = createNotebookOverlay(hudRoot, runController);
+ const scene = createScene(canvas, runController);
 
   return {
     destroy() {
-      notebook.destroy();
-      ticket.destroy();
-      hud.destroy();
-      scene.destroy();
+ scene.destroy();
+ notebook.destroy();
+ ticket.destroy();
+ hud.destroy();
     },
   };
 }
