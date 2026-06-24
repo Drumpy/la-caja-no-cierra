@@ -11,7 +11,18 @@ const RADIO_LINES = [
   "Llaman al 0800 si ven actividad rara en la feria.",
 ];
 
+const INTERFERENCE_LINES = [
+  "...zzt... la senal se corta apenas se acerca alguien.",
+  "...el locutor se queda callado, como si escuchara algo afuera.",
+  "...una interferencia tapa la voz. Vuelve, pero mas baja.",
+  "...por la radio entra un ruido que no es de la lluvia.",
+];
+
 let lastLine = -1;
+
+export function getInterferenceLine() {
+  return INTERFERENCE_LINES[Math.floor(Math.random() * INTERFERENCE_LINES.length)];
+}
 
 export function getRadioLine(curse = 0) {
   if (curse >= 3 && Math.random() < 0.4) {
