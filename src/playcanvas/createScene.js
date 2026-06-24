@@ -122,45 +122,39 @@ export function createScene(canvas, runController) {
   const matRadio = makeMat("radio", new pc.Color(0.2, 0.18, 0.15));
   const matGato = makeMat("gato", new pc.Color(0.3, 0.26, 0.18));
 
-  // ── Kiosco cerrado: 2.5 ancho x 2.5 profundo x 2.4 alto ──
-  const W = 2.5, D = 2.5, H = 2.4;
-  const HOLE_W = 1.8, HOLE_H = 1.0;
+  const W = 3.5, D = 3.5, H = 2.6;
+  const HOLE_W = 1.0, HOLE_H = 1.2;
+  const WIN_CY = 1.5;
 
   addPlane(app, "floor", { x: 0, y: 0, z: -0.75 }, { x: W, y: D }, matFloor);
   addPlane(app, "ceiling", { x: 0, y: H, z: -0.75 }, { x: W, y: D }, matCeiling, { x: 90, y: 0, z: 0 });
 
-  // Pared trasera con ventanilla
-  addWallWithHole(app, "front-wall", 0, HOLE_H/2 + 0.4, -D/2 - 0.5, W, H, 0.1, HOLE_W, HOLE_H);
-  addBox(app, "window-glass", { x: 0, y: HOLE_H/2 + 0.4, z: -D/2 - 0.5 }, { x: HOLE_W, y: HOLE_H, z: 0.02 }, matGlass);
-  addBox(app, "window-sill", { x: 0, y: 0.4, z: -D/2 - 0.5 }, { x: W, y: 0.8, z: 0.1 }, matWall);
+  addWallWithHole(app, "front-wall", 0, WIN_CY, -D/2 - 0.5, W, H, 0.1, HOLE_W, HOLE_H);
+  addBox(app, "window-glass", { x: 0, y: WIN_CY, z: -D/2 - 0.5 }, { x: HOLE_W, y: HOLE_H, z: 0.02 }, matGlass);
+  addBox(app, "window-sill", { x: 0, y: WIN_CY - HOLE_H/2 - 0.3, z: -D/2 - 0.5 }, { x: W, y: 0.6, z: 0.1 }, matWall);
 
-  // Pared izquierda, derecha, frontal (con puerta)
   addBox(app, "wall-left", { x: -W/2, y: H/2, z: -0.75 }, { x: 0.1, y: H, z: D }, matWall);
   addBox(app, "wall-right", { x: W/2, y: H/2, z: -0.75 }, { x: 0.1, y: H, z: D }, matWall);
-  addWallWithHole(app, "back-wall", 0, 1.1, 0.75, W, H, 0.1, 0.9, 2.0);
+  addBox(app, "wall-back", { x: 0, y: H/2, z: 0.75 }, { x: W, y: H, z: 0.1 }, matWall);
 
-  // Mostrador + estante
-  addBox(app, "counter", { x: 0, y: 0.45, z: -1.0 }, { x: 2.0, y: 0.4, z: 0.5 }, matCounter);
-  addBox(app, "shelf", { x: 0, y: 1.3, z: -D/2 - 0.4 }, { x: 2.0, y: 0.4, z: 0.08 }, matCounter);
+  addBox(app, "counter", { x: 0, y: 0.45, z: -1.2 }, { x: 2.4, y: 0.4, z: 0.5 }, matCounter);
+  addBox(app, "shelf", { x: 0, y: 1.4, z: -D/2 - 0.4 }, { x: 2.4, y: 0.4, z: 0.08 }, matCounter);
 
-  // Objetos
-  const caja = addBox(app, "caja", { x: -0.65, y: 0.75, z: -1.05 }, { x: 0.4, y: 0.2, z: 0.3 }, matCaja);
-  const libreta = addBox(app, "libreta", { x: 0.6, y: 0.68, z: -0.95 }, { x: 0.45, y: 0.05, z: 0.32 }, matLibreta);
-  const radio = addBox(app, "radio", { x: 0.9, y: 0.72, z: -1.2 }, { x: 0.28, y: 0.22, z: 0.2 }, matRadio);
-  const gato = addBox(app, "gato", { x: -0.95, y: 0.68, z: -1.3 }, { x: 0.3, y: 0.14, z: 0.18 }, matGato);
+  const caja = addBox(app, "caja", { x: -0.85, y: 0.75, z: -1.25 }, { x: 0.4, y: 0.2, z: 0.3 }, matCaja);
+  const libreta = addBox(app, "libreta", { x: 0.7, y: 0.68, z: -1.15 }, { x: 0.45, y: 0.05, z: 0.32 }, matLibreta);
+  const radio = addBox(app, "radio", { x: 1.1, y: 0.72, z: -1.4 }, { x: 0.28, y: 0.22, z: 0.2 }, matRadio);
+  const gato = addBox(app, "gato", { x: -1.15, y: 0.68, z: -1.5 }, { x: 0.3, y: 0.14, z: 0.18 }, matGato);
 
-  // Productos en estante
   const productEntities = {
-    cafe: addBox(app, "product-cafe", { x: -0.75, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
-    "cigarros-ficticios": addBox(app, "product-cigarros", { x: -0.35, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
-    chicles: addBox(app, "product-chicles", { x: 0.1, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
-    vela: addBox(app, "product-vela", { x: 0.55, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    cafe: addBox(app, "product-cafe", { x: -0.9, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    "cigarros-ficticios": addBox(app, "product-cigarros", { x: -0.45, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    chicles: addBox(app, "product-chicles", { x: 0.0, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    vela: addBox(app, "product-vela", { x: 0.45, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
   };
   const productBaseY = {};
   for (const [id, e] of Object.entries(productEntities)) productBaseY[id] = e.getLocalPosition().y;
 
-  // Cliente afuera
-  const customer = addBox(app, "customer", { x: 0, y: 0.9, z: -D/2 - 1.2 }, { x: 0.45, y: 1.1, z: 0.06 }, matCustomer);
+  const customer = addBox(app, "customer", { x: 0, y: 1.0, z: -D/2 - 0.9 }, { x: 0.5, y: 1.3, z: 0.06 }, matCustomer);
 
   // Calle
   addPlane(app, "street", { x: 0, y: 0.01, z: -D/2 - 2.5 }, { x: 8, y: 6 }, matStreet);
@@ -246,7 +240,6 @@ export function createScene(canvas, runController) {
     bounds: { minX: -W/2 + 0.3, maxX: W/2 - 0.3, minZ: -D/2 + 0.3, maxZ: 0.5 },
     onClick: handleClick,
   });
-
   // ── Update ──
   app.on("update", (dt) => {
     for (const [entity, h] of highlightTimers) {
