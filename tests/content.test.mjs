@@ -1,28 +1,37 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PRODUCTS } from "../src/content/products.js";
 import { CUSTOMERS } from "../src/content/customers.js";
+import { PRODUCTS } from "../src/content/products.js";
 import { TRANSACTIONS } from "../src/content/transactions.js";
 
-test("V0 core products exist", () => {
-  for (const id of ["cafe", "chicles", "cigarros-ficticios", "vela"]) {
-    assert.ok(PRODUCTS[id], `Missing core product ${id}`);
-  }
+test("V0 has only the four playable products", () => {
+  assert.deepEqual(Object.keys(PRODUCTS).sort(), [
+    "cafe",
+    "chicles",
+    "cigarros-ficticios",
+    "vela",
+  ]);
 });
 
 test("all products have valid prices", () => {
-  for (const p of Object.values(PRODUCTS)) {
-    assert.ok(typeof p.price === "number" && p.price >= 0, `${p.id} has invalid price`);
-    assert.ok(p.label, `${p.id} missing label`);
-    assert.ok(p.symbols, `${p.id} missing symbols`);
+  for (const product of Object.values(PRODUCTS)) {
+    assert.ok(typeof product.price === "number" && product.price >= 0);
+    assert.ok(product.label, `${product.id} missing label`);
+    assert.ok(product.symbols, `${product.id} missing symbols`);
   }
 });
 
-test("all customers have displayName and color", () => {
-  for (const c of Object.values(CUSTOMERS)) {
-    assert.ok(c.displayName, `${c.id} missing displayName`);
-    assert.ok(c.color, `${c.id} missing color`);
-    assert.ok(c.role, `${c.id} missing role`);
+test("V0 uses named characters, not type labels", () => {
+  assert.deepEqual(Object.keys(CUSTOMERS).sort(), ["el-yona", "julia-r", "taxista"]);
+  assert.equal(CUSTOMERS["el-yona"].displayName, "El Yona");
+  assert.equal(CUSTOMERS["julia-r"].displayName, "Julia R.");
+});
+
+test("all customers have displayName, role, and color", () => {
+  for (const customer of Object.values(CUSTOMERS)) {
+    assert.ok(customer.displayName, `${customer.id} missing displayName`);
+    assert.ok(customer.color, `${customer.id} missing color`);
+    assert.ok(customer.role, `${customer.id} missing role`);
   }
 });
 
@@ -38,9 +47,4 @@ test("all transaction customer ids exist", () => {
   for (const tx of Object.values(TRANSACTIONS)) {
     assert.ok(CUSTOMERS[tx.customerId], `${tx.id} references missing customer`);
   }
-});
-
-test("V0 content uses named characters, not type labels", () => {
-  assert.equal(CUSTOMERS["el-yona"].displayName, "El Yona");
-  assert.equal(CUSTOMERS["julia-r"].displayName, "Julia R.");
 });
