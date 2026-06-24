@@ -2,7 +2,20 @@ import { TRANSACTIONS } from "../content/transactions.js";
 import { cloneState, createInitialState } from "./state.js";
 import { resolveTransactionAction } from "./transactionEngine.js";
 
-const BASE_QUEUE = ["taxista-lluvia-01", "julia-libreta-01", "yona-aviso-01"];
+// Cola por noche
+const NIGHT_QUEUES = {
+  1: ["taxista-lluvia-01", "julia-libreta-01", "yona-aviso-01"],
+  2: ["delivery-apurado-01", "cuidacoches-radar-01", "cheto-premium-01", "flaco-frio-01"],
+  3: ["mabel-entrada-01", "mabel-oraculo-01"],
+};
+
+const NIGHT_INFO = {
+  1: { title: "Turno nuevo", subtitle: "Lluvia fina. Primer turno del almacen.", state: "lluvia-fina" },
+  2: { title: "Fiado", subtitle: "La libreta ya tiene paginas usadas. La calle se mueve.", state: "lluvia-fina" },
+  3: { title: "Tablado", subtitle: "Tambores lejanos. Alguien del carnaval viene a verte.", state: "tablado" },
+};
+
+const MAX_NIGHT = 3;
 
 function resolveQueue(queue) {
   return queue.map((id) => {
@@ -12,34 +25,69 @@ function resolveQueue(queue) {
   });
 }
 
-function cloneTransaction(transaction) {
+function cloneTx(transaction) {
   return transaction ? structuredClone(transaction) : null;
 }
 
 export function createRunController() {
+  let phase = "title"; // title | playing | nightClosed | gameEnd
+  let night = 1;
   let state = createInitialState();
-  let queue = [...BASE_QUEUE];
-  let currentId = queue.shift();
-  let closed = false;
+  let queue = [];
+  let currentId = null;
   const listeners = new Set();
 
   function emit() {
-    const snapshot = controller.getSnapshot();
-    for (const listener of Array.from(listeners)) listener(snapshot);
+    const snap = controller.getSnapshot();
+    for (const listener of Array.from(listeners)) listener(snap);
+  }
+
+  function startNight(n) {
+    queue = [...(NIGHT_QUEUES[n] ?? [])];
+    currentId = queue.shift() ?? null;
+    state = { ...state, selectedProductIds: [] };
+    phase = "playing";
   }
 
   function closeIfDone() {
-    if (currentId || closed) return;
-    closed = true;
-    state = {
-      ...state,
-      lastMessage: "La caja no cierra. Saldo pendiente: una noche mas.",
-    };
+    if (currentId || phase !== "playing") return;
+    if (night >= MAX_NIGHT) {
+      phase = "gameEnd";
+      state = { ...state, lastMessage: "La caja no cierra. Saldo pendiente: una noche mas." };
+    } else {
+      phase = "nightClosed";
+      state = { ...state, lastMessage: `Cierre de noche ${night}. La caja cuenta sola.` };
+    }
   }
 
   const controller = {
+    start() {
+      if (phase !== "title") return controller.getSnapshot();
+      night = 1;
+      state = createInitialState();
+      startNight(1);
+      emit();
+      return controller.getSnapshot();
+    },
+
+    nextNight() {
+      if (phase !== "nightClosed") return controller.getSnapshot();
+      night++;
+      startNight(night);
+      emit();
+      return controller.getSnapshot();
+    },
+
+    restart() {
+      night = 1;
+      state = createInitialState();
+      phase = "title";
+      emit();
+      return controller.getSnapshot();
+    },
+
     chooseAction(actionId) {
-      if (closed || !currentId) return controller.getSnapshot();
+      if (phase !== "playing" || !currentId) return controller.getSnapshot();
 
       const transaction = TRANSACTIONS[currentId];
       if (!transaction.actions[actionId]) {
@@ -59,15 +107,9 @@ export function createRunController() {
 
     selectProduct(productId) {
       const transaction = currentId ? TRANSACTIONS[currentId] : null;
-      if (!transaction?.request.productIds.includes(productId)) {
-        return controller.getSnapshot();
-      }
-
+      if (!transaction?.request.productIds.includes(productId)) return controller.getSnapshot();
       if (state.selectedProductIds.includes(productId)) return controller.getSnapshot();
-      state = {
-        ...state,
-        selectedProductIds: [...state.selectedProductIds, productId],
-      };
+      state = { ...state, selectedProductIds: [...state.selectedProductIds, productId] };
       emit();
       return controller.getSnapshot();
     },
@@ -86,10 +128,13 @@ export function createRunController() {
 
     getSnapshot() {
       return {
+        phase,
+        night,
+        nightInfo: NIGHT_INFO[night],
         state: cloneState(state),
-        queue: resolveQueue(queue).map(cloneTransaction),
-        currentTransaction: cloneTransaction(currentId ? TRANSACTIONS[currentId] : null),
-        closed,
+        queue: resolveQueue(queue).map(cloneTx),
+        currentTransaction: cloneTx(currentId ? TRANSACTIONS[currentId] : null),
+        maxNight: MAX_NIGHT,
       };
     },
   };

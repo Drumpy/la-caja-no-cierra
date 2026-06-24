@@ -181,3 +181,93 @@ button:disabled {
   font-size: 12px;
   color: rgba(180, 160, 120, 0.7);
 }
+
+/* ── Pantallas full-screen ── */
+
+.screen {
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(8, 6, 4, 0.88);
+  backdrop-filter: blur(4px);
+  gap: 20px;
+  z-index: 10;
+}
+
+.screen h1 {
+  font-size: 42px;
+  font-weight: normal;
+  letter-spacing: 0.06em;
+  color: #c9a863;
+  margin: 0;
+  text-shadow: 0 2px 20px rgba(201, 168, 99, 0.2);
+}
+
+.screen h2 {
+  font-size: 28px;
+  font-weight: normal;
+  color: #d9c69b;
+  margin: 0;
+}
+
+.screen .subtitle {
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(244, 230, 200, 0.6);
+  max-width: 460px;
+  font-style: italic;
+}
+
+.screen small {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(201, 168, 99, 0.5);
+}
+
+.screen .closure-stats {
+  display: flex;
+  gap: 24px;
+  font-size: 15px;
+  color: rgba(244, 230, 200, 0.7);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.screen .closure-message {
+  font-size: 17px;
+  font-style: italic;
+  color: #d9c69b;
+  max-width: 400px;
+  line-height: 1.4;
+}
+
+.screen .end-flavor {
+  font-size: 14px;
+  color: rgba(180, 160, 120, 0.5);
+}
+
+.big-button {
+  min-height: 44px;
+  min-width: 200px;
+  font-size: 16px;
+  padding: 10px 24px;
+  border: 1px solid rgba(201, 168, 99, 0.4);
+  border-radius: 4px;
+  background: rgba(45, 38, 25, 0.9);
+  color: #f4e6c8;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.big-button:hover {
+  background: rgba(65, 55, 38, 0.95);
+  border-color: rgba(201, 168, 99, 0.7);
+  box-shadow: 0 4px 20px rgba(201, 168, 99, 0.15);
+}
