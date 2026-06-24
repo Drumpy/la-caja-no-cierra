@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "asset": "node tools/asset-gen/cli.mjs",
+    "asset:setup": "node tools/asset-gen/cli.mjs setup",
+    "asset:promote": "node tools/asset-gen/cli.mjs promote",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
@@ -13,5 +16,7 @@
     "playcanvas": "^2.12.3",
     "vite": "^7.2.7"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "sharp": "^0.35.1"
+  }
 }

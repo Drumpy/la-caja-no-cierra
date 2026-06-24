@@ -1,17 +1,36 @@
 # asset-gen
 
-This folder is a placeholder for the future adaptation of `blu-game/tools/asset-gen`.
+Local asset pipeline adapted from `blu-game/tools/asset-gen`.
 
-Prototype V0 does not implement the generator. V0 uses placeholder geometry and a small number of semi-manual 2.5D character assets.
+It uses `ima2` as the image generator, which talks to ChatGPT through OAuth.
+Generated variants go to staging first; nothing reaches `public/assets` until
+you promote one.
 
-When the core loop is validated, adapt the architecture from `blu-game`:
+```bash
+pnpm asset:setup
+pnpm asset list
+pnpm asset texture floorTile
+pnpm asset:promote texture floor-tile 1
+pnpm asset character taxistaWalk
+pnpm asset:promote character taxista-walk 1
+```
 
-- CLI `pnpm asset <skill> ...`
-- staging variants
-- `report.json`
-- manual promote
-- auto-discovered skills
-- global art direction injection
-- QA before promotion
+Current V0 texture specs live in `asset-gen.config.mjs`:
 
-Do not copy Blu's art direction, palette or assets.
+- `floorTile`
+- `wallPlaster`
+- `ceilingSheet`
+- `woodCounter`
+- `productCafe`
+- `productChicles`
+- `productVela`
+- `productCigarros`
+- `taxistaCutout`
+
+Promoted textures are expected at `public/assets/textures/<name>.png` and are
+loaded by the PlayCanvas scene when present. Missing files fall back to simple
+materials so the game still builds.
+
+Promoted character frames are expected at `public/assets/characters/<name>N.png`.
+Taxista currently uses `taxista-walk1.png` through `taxista-walk4.png` for
+enter/idle/exit billboard animation.
