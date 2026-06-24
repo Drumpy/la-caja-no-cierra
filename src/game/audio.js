@@ -5,6 +5,37 @@ function getCtx() {
   return ctx;
 }
 
+// Bus de audio: todo pasa por master; sfx y ambient cuelgan de él. Sliders mueven estos.
+let bus = null;
+function getBus() {
+  const c = getCtx();
+  if (!bus) {
+    const master = c.createGain();
+    master.gain.value = 0.8;
+    master.connect(c.destination);
+    const sfx = c.createGain();
+    sfx.gain.value = 1;
+    sfx.connect(master);
+    const ambient = c.createGain();
+    ambient.gain.value = 0.6;
+    ambient.connect(master);
+    const voice = c.createGain();
+    voice.gain.value = 0.9;
+    voice.connect(master);
+    bus = { master, sfx, ambient, voice };
+  }
+  return bus;
+}
+
+export function setVolume(channel, v) {
+  const b = getBus();
+  if (b[channel]) b[channel].gain.value = v;
+}
+
+export function getVolume(channel) {
+  return getBus()[channel]?.gain.value ?? 1;
+}
+
 export function playClick() {
   const c = getCtx();
   const o = c.createOscillator();
@@ -13,7 +44,7 @@ export function playClick() {
   o.frequency.value = 180;
   g.gain.setValueAtTime(0.08, c.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.06);
-  o.connect(g); g.connect(c.destination);
+  o.connect(g); g.connect(getBus().sfx);
   o.start(); o.stop(c.currentTime + 0.06);
 }
 
@@ -27,7 +58,7 @@ export function playTicket() {
     const t = c.currentTime + i * 0.03;
     g.gain.setValueAtTime(0.04, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-    o.connect(g); g.connect(c.destination);
+    o.connect(g); g.connect(getBus().sfx);
     o.start(t); o.stop(t + 0.04);
   }
 }
@@ -41,7 +72,7 @@ export function playCoin() {
   o.frequency.exponentialRampToValueAtTime(400, c.currentTime + 0.15);
   g.gain.setValueAtTime(0.06, c.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.2);
-  o.connect(g); g.connect(c.destination);
+  o.connect(g); g.connect(getBus().sfx);
   o.start(); o.stop(c.currentTime + 0.2);
 }
 
@@ -53,7 +84,7 @@ export function playError() {
   o.frequency.value = 90;
   g.gain.setValueAtTime(0.06, c.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.15);
-  o.connect(g); g.connect(c.destination);
+  o.connect(g); g.connect(getBus().sfx);
   o.start(); o.stop(c.currentTime + 0.15);
 }
 
@@ -67,41 +98,91 @@ export function playCat() {
   o.frequency.linearRampToValueAtTime(200, c.currentTime + 0.3);
   g.gain.setValueAtTime(0.03, c.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.35);
-  o.connect(g); g.connect(c.destination);
+  o.connect(g); g.connect(getBus().sfx);
   o.start(); o.stop(c.currentTime + 0.35);
+}
+
+// Carga + decode de un clip mp3, cacheado por URL (rain, thunder, etc.).
+const clipCache = new Map();
+function loadClip(c, url) {
+  if (!clipCache.has(url)) {
+    clipCache.set(
+      url,
+      fetch(url).then((r) => r.arrayBuffer()).then((ab) => c.decodeAudioData(ab)),
+    );
+  }
+  return clipCache.get(url);
+}
+
+// Voz de personaje: corta la anterior si sigue sonando, pasa por canal voice.
+let voiceSource = null;
+export function playVoice(url) {
+  const c = getCtx();
+  if (voiceSource) {
+    try { voiceSource.stop(); } catch {}
+    voiceSource = null;
+  }
+  loadClip(c, url)
+    .then((buffer) => {
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      src.connect(getBus().voice);
+      src.onended = () => { if (voiceSource === src) voiceSource = null; };
+      src.start();
+      voiceSource = src;
+    })
+    .catch(() => {});
 }
 
 let rainSource = null;
 export function startRain() {
   if (rainSource) return;
   const c = getCtx();
-  const bufferSize = c.sampleRate * 2;
-  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
-
-  const src = c.createBufferSource();
-  src.buffer = buffer;
-  src.loop = true;
-
-  const filter = c.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.value = 600;
-
-  const g = c.createGain();
-  g.gain.value = 0.04;
-
-  src.connect(filter); filter.connect(g); g.connect(c.destination);
-  src.start();
-  rainSource = { src, g };
+  rainSource = { src: null, g: null, gain: 0.5 }; // gain previo al load
+  loadClip(c, "/assets/sounds/rain.mp3")
+    .then((buffer) => {
+      if (!rainSource) return; // se detuvo antes de cargar
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const g = c.createGain();
+      g.gain.value = rainSource.gain;
+      src.connect(g); g.connect(getBus().ambient);
+      src.start();
+      rainSource.src = src;
+      rainSource.g = g;
+    })
+    .catch(() => {});
 }
 
 export function setRainIntensity(v) {
-  if (rainSource) rainSource.g.gain.value = 0.02 + v * 0.06;
+  if (!rainSource) return;
+  const gain = 0.3 + v * 0.4;
+  rainSource.gain = gain;
+  if (rainSource.g) rainSource.g.gain.value = gain;
 }
 
 export function stopRain() {
   if (!rainSource) return;
-  rainSource.src.stop();
+  if (rainSource.src) rainSource.src.stop();
   rainSource = null;
+}
+
+export function playThunder() {
+  const c = getCtx();
+  loadClip(c, "/assets/sounds/thunder.mp3")
+    .then((buffer) => {
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      const dur = buffer.duration;
+      const fade = Math.min(0.8, dur * 0.3); // fade out al final
+      const t = c.currentTime;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.9, t);
+      g.gain.setValueAtTime(0.9, t + dur - fade);
+      g.gain.linearRampToValueAtTime(0.0001, t + dur);
+      src.connect(g); g.connect(getBus().ambient);
+      src.start(t); src.stop(t + dur + 0.05);
+    })
+    .catch(() => {});
 }

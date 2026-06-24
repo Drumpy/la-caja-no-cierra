@@ -1,5 +1,11 @@
 import { cloneState } from "./state.js";
 
+const PRODUCT_ACTION_IDS = new Set(["charge", "credit", "give"]);
+
+export function requiresProductsForAction(actionId, action = {}) {
+  return action.requiresProducts ?? PRODUCT_ACTION_IDS.has(actionId);
+}
+
 function addDebt(state, debt) {
   if (!debt) return;
   const current = state.debts[debt.customerId] ?? { amount: 0, notes: [] };
@@ -18,6 +24,16 @@ function addOldDebt(state, oldDebt) {
   };
 }
 
+function removeOldDebt(state, customerId) {
+  if (!customerId) return;
+  delete state.oldDebts[customerId];
+}
+
+function deferredIds(action) {
+  if (action.deferredTransactionIds) return [...action.deferredTransactionIds];
+  return action.deferredTransactionId ? [action.deferredTransactionId] : [];
+}
+
 export function resolveTransactionAction(state, transaction, actionId) {
   const action = transaction.actions[actionId];
   if (!action) {
@@ -26,11 +42,12 @@ export function resolveTransactionAction(state, transaction, actionId) {
 
   const next = cloneState(state);
   next.money += action.money ?? 0;
-  next.curse += action.curse ?? 0;
+  next.curse = Math.max(0, next.curse + (action.curse ?? 0));
   next.reputation += action.reputation ?? 0;
 
   addDebt(next, action.debt);
   addOldDebt(next, action.oldDebt);
+  removeOldDebt(next, action.removeOldDebtCustomerId);
 
   const ticket = {
     transactionId: transaction.id,
@@ -40,7 +57,6 @@ export function resolveTransactionAction(state, transaction, actionId) {
   };
 
   const message = action.effectText ?? action.clueText ?? "La caja no dice nada.";
-
   next.lastTicket = { ...ticket, symbols: [...ticket.symbols] };
   next.lastMessage = message;
   next.selectedProductIds = [];
@@ -49,8 +65,7 @@ export function resolveTransactionAction(state, transaction, actionId) {
     state: next,
     ticket,
     message,
-    deferredTransactionIds: action.deferredTransactionId
-      ? [action.deferredTransactionId]
-      : [],
+    nextTransactionId: action.nextTransactionId ?? null,
+    deferredTransactionIds: deferredIds(action),
   };
 }
