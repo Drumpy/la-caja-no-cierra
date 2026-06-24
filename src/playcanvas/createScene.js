@@ -123,31 +123,33 @@ export function createScene(canvas, runController) {
   const matGato = makeMat("gato", new pc.Color(0.3, 0.26, 0.18));
 
   const W = 3.5, D = 4.5, H = 2.6;
-  const HOLE_W = 1.0, HOLE_H = 1.2;
-  const WIN_CY = 1.5;
+  const HOLE_W = 1.0, HOLE_H = 0.8;
+  const SILL_H = 1.1;
+  const WIN_CY = SILL_H + HOLE_H / 2;
   const FRONT_Z = -D / 2;
   const BACK_Z = D / 2;
 
   addPlane(app, "floor", { x: 0, y: 0, z: 0 }, { x: W, y: D }, matFloor);
-  addPlane(app, "ceiling", { x: 0, y: H, z: 0 }, { x: W, y: D }, matCeiling, { x: 90, y: 0, z: 0 });
+  addBox(app, "ceiling", { x: 0, y: H - 0.02, z: 0 }, { x: W, y: 0.04, z: D }, matCeiling);
 
   addWallWithHole(app, "front-wall", 0, WIN_CY, FRONT_Z, W, H, 0.1, HOLE_W, HOLE_H);
   addBox(app, "window-glass", { x: 0, y: WIN_CY, z: FRONT_Z }, { x: HOLE_W, y: HOLE_H, z: 0.02 }, matGlass);
-  addBox(app, "window-sill", { x: 0, y: 0.45, z: FRONT_Z }, { x: W, y: 0.9, z: 0.1 }, matWall);
+  addBox(app, "window-sill", { x: 0, y: SILL_H / 2, z: FRONT_Z }, { x: W, y: SILL_H, z: 0.1 }, matWall);
 
   addBox(app, "wall-left", { x: -W / 2, y: H / 2, z: 0 }, { x: 0.1, y: H, z: D }, matWall);
   addBox(app, "wall-right", { x: W / 2, y: H / 2, z: 0 }, { x: 0.1, y: H, z: D }, matWall);
   addBox(app, "wall-back", { x: 0, y: H / 2, z: BACK_Z }, { x: W, y: H, z: 0.1 }, matWall);
 
-  const counterZ = FRONT_Z + 0.6;
+  const counterZ = FRONT_Z + 0.7;
   addBox(app, "counter", { x: 0, y: 0.45, z: counterZ }, { x: 2.4, y: 0.4, z: 0.5 }, matCounter);
 
-  const shelfZ = FRONT_Z + 0.15;
-  const shelfY = 1.4;
-  addBox(app, "shelf", { x: 0, y: shelfY, z: shelfZ }, { x: 2.4, y: 0.04, z: 0.3 }, matCounter);
+  const backShelfZ = BACK_Z - 0.25;
+  const shelfY = 1.3;
+  addBox(app, "shelf-board", { x: 0, y: shelfY, z: backShelfZ }, { x: 2.4, y: 0.04, z: 0.3 }, matCounter);
+  addBox(app, "shelf-bracket", { x: 0, y: shelfY - 0.3, z: backShelfZ + 0.1 }, { x: 2.4, y: 0.04, z: 0.04 }, matCounter);
   const shelfTopY = shelfY + 0.02 + 0.09;
 
-  const productZ = shelfZ;
+  const productZ = backShelfZ;
   const productEntities = {
     cafe: addBox(app, "product-cafe", { x: -0.9, y: shelfTopY, z: productZ }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
     "cigarros-ficticios": addBox(app, "product-cigarros", { x: -0.45, y: shelfTopY, z: productZ }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
