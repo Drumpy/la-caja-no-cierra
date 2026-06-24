@@ -101,10 +101,10 @@ export function createScene(canvas, runController) {
   app.start();
 
   // Atmósfera: niebla + cielo oscuro
-  app.scene.fog = pc.FOG_LINEAR;
-  app.scene.fogColor = new pc.Color(0.02, 0.025, 0.04);
-  app.scene.fogNear = 3.5;
-  app.scene.fogFar = 11;
+  app.scene.fog.type = pc.FOG_LINEAR;
+  app.scene.fog.color = new pc.Color(0.02, 0.025, 0.04);
+  app.scene.fog.start = 3.5;
+  app.scene.fog.end = 11;
   app.scene.ambientLight = new pc.Color(0.08, 0.07, 0.06);
 
   // Materiales
