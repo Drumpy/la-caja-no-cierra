@@ -122,42 +122,51 @@ export function createScene(canvas, runController) {
   const matRadio = makeMat("radio", new pc.Color(0.2, 0.18, 0.15));
   const matGato = makeMat("gato", new pc.Color(0.3, 0.26, 0.18));
 
-  const W = 3.5, D = 3.5, H = 2.6;
+  const W = 3.5, D = 4.5, H = 2.6;
   const HOLE_W = 1.0, HOLE_H = 1.2;
   const WIN_CY = 1.5;
+  const FRONT_Z = -D / 2;
+  const BACK_Z = D / 2;
 
-  addPlane(app, "floor", { x: 0, y: 0, z: -0.75 }, { x: W, y: D }, matFloor);
-  addPlane(app, "ceiling", { x: 0, y: H, z: -0.75 }, { x: W, y: D }, matCeiling, { x: 90, y: 0, z: 0 });
+  addPlane(app, "floor", { x: 0, y: 0, z: 0 }, { x: W, y: D }, matFloor);
+  addPlane(app, "ceiling", { x: 0, y: H, z: 0 }, { x: W, y: D }, matCeiling, { x: 90, y: 0, z: 0 });
 
-  addWallWithHole(app, "front-wall", 0, WIN_CY, -D/2 - 0.5, W, H, 0.1, HOLE_W, HOLE_H);
-  addBox(app, "window-glass", { x: 0, y: WIN_CY, z: -D/2 - 0.5 }, { x: HOLE_W, y: HOLE_H, z: 0.02 }, matGlass);
-  addBox(app, "window-sill", { x: 0, y: WIN_CY - HOLE_H/2 - 0.3, z: -D/2 - 0.5 }, { x: W, y: 0.6, z: 0.1 }, matWall);
+  addWallWithHole(app, "front-wall", 0, WIN_CY, FRONT_Z, W, H, 0.1, HOLE_W, HOLE_H);
+  addBox(app, "window-glass", { x: 0, y: WIN_CY, z: FRONT_Z }, { x: HOLE_W, y: HOLE_H, z: 0.02 }, matGlass);
+  addBox(app, "window-sill", { x: 0, y: 0.45, z: FRONT_Z }, { x: W, y: 0.9, z: 0.1 }, matWall);
 
-  addBox(app, "wall-left", { x: -W/2, y: H/2, z: -0.75 }, { x: 0.1, y: H, z: D }, matWall);
-  addBox(app, "wall-right", { x: W/2, y: H/2, z: -0.75 }, { x: 0.1, y: H, z: D }, matWall);
-  addBox(app, "wall-back", { x: 0, y: H/2, z: 0.75 }, { x: W, y: H, z: 0.1 }, matWall);
+  addBox(app, "wall-left", { x: -W / 2, y: H / 2, z: 0 }, { x: 0.1, y: H, z: D }, matWall);
+  addBox(app, "wall-right", { x: W / 2, y: H / 2, z: 0 }, { x: 0.1, y: H, z: D }, matWall);
+  addBox(app, "wall-back", { x: 0, y: H / 2, z: BACK_Z }, { x: W, y: H, z: 0.1 }, matWall);
 
-  addBox(app, "counter", { x: 0, y: 0.45, z: -1.2 }, { x: 2.4, y: 0.4, z: 0.5 }, matCounter);
-  addBox(app, "shelf", { x: 0, y: 1.4, z: -D/2 - 0.4 }, { x: 2.4, y: 0.4, z: 0.08 }, matCounter);
+  const counterZ = FRONT_Z + 0.6;
+  addBox(app, "counter", { x: 0, y: 0.45, z: counterZ }, { x: 2.4, y: 0.4, z: 0.5 }, matCounter);
 
-  const caja = addBox(app, "caja", { x: -0.85, y: 0.75, z: -1.25 }, { x: 0.4, y: 0.2, z: 0.3 }, matCaja);
-  const libreta = addBox(app, "libreta", { x: 0.7, y: 0.68, z: -1.15 }, { x: 0.45, y: 0.05, z: 0.32 }, matLibreta);
-  const radio = addBox(app, "radio", { x: 1.1, y: 0.72, z: -1.4 }, { x: 0.28, y: 0.22, z: 0.2 }, matRadio);
-  const gato = addBox(app, "gato", { x: -1.15, y: 0.68, z: -1.5 }, { x: 0.3, y: 0.14, z: 0.18 }, matGato);
+  const shelfZ = FRONT_Z + 0.15;
+  const shelfY = 1.4;
+  addBox(app, "shelf", { x: 0, y: shelfY, z: shelfZ }, { x: 2.4, y: 0.04, z: 0.3 }, matCounter);
+  const shelfTopY = shelfY + 0.02 + 0.09;
 
+  const productZ = shelfZ;
   const productEntities = {
-    cafe: addBox(app, "product-cafe", { x: -0.9, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
-    "cigarros-ficticios": addBox(app, "product-cigarros", { x: -0.45, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
-    chicles: addBox(app, "product-chicles", { x: 0.0, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
-    vela: addBox(app, "product-vela", { x: 0.45, y: 1.22, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    cafe: addBox(app, "product-cafe", { x: -0.9, y: shelfTopY, z: productZ }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    "cigarros-ficticios": addBox(app, "product-cigarros", { x: -0.45, y: shelfTopY, z: productZ }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    chicles: addBox(app, "product-chicles", { x: 0.0, y: shelfTopY, z: productZ }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    vela: addBox(app, "product-vela", { x: 0.45, y: shelfTopY, z: productZ }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
   };
   const productBaseY = {};
   for (const [id, e] of Object.entries(productEntities)) productBaseY[id] = e.getLocalPosition().y;
 
-  const customer = addBox(app, "customer", { x: 0, y: 1.0, z: -D/2 - 0.9 }, { x: 0.5, y: 1.3, z: 0.06 }, matCustomer);
+  const counterTopY = 0.45 + 0.2;
+  const caja = addBox(app, "caja", { x: -0.85, y: counterTopY + 0.1, z: counterZ }, { x: 0.4, y: 0.2, z: 0.3 }, matCaja);
+  const libreta = addBox(app, "libreta", { x: 0.7, y: counterTopY + 0.025, z: counterZ + 0.05 }, { x: 0.45, y: 0.05, z: 0.32 }, matLibreta);
+  const radio = addBox(app, "radio", { x: 1.1, y: counterTopY + 0.11, z: counterZ - 0.1 }, { x: 0.28, y: 0.22, z: 0.2 }, matRadio);
+  const gato = addBox(app, "gato", { x: -1.15, y: counterTopY + 0.07, z: counterZ - 0.15 }, { x: 0.3, y: 0.14, z: 0.18 }, matGato);
+
+  const customer = addBox(app, "customer", { x: 0, y: 1.0, z: FRONT_Z - 0.5 }, { x: 0.5, y: 1.3, z: 0.06 }, matCustomer);
 
   // Calle
-  addPlane(app, "street", { x: 0, y: 0.01, z: -D/2 - 2.5 }, { x: 8, y: 6 }, matStreet);
+  addPlane(app, "street", { x: 0, y: 0.01, z: FRONT_Z - 2.5 }, { x: 8, y: 6 }, matStreet);
 
   const rainDrops = [];
   const RAIN_COUNT = 60;
@@ -166,7 +175,7 @@ export function createScene(canvas, runController) {
     const drop = addBox(app, `rain-${i}`, {
       x: (Math.random() - 0.5) * 7,
       y: Math.random() * 4 + 2,
-      z: -D/2 - 1 - Math.random() * 4,
+      z: FRONT_Z - 0.5 - Math.random() * 4,
     }, { x: 0.01, y: 0.15, z: 0.01 }, matRain);
     rainDrops.push(drop);
   }
@@ -185,7 +194,7 @@ export function createScene(canvas, runController) {
   // ── Cámara primera persona ──
   const camera = new pc.Entity("camera");
   camera.addComponent("camera", { clearColor: new pc.Color(0.02, 0.025, 0.04), fov: 55, farClip: 20 });
-  camera.setLocalPosition(0, 1.55, 0.3);
+  camera.setLocalPosition(0, 1.55, BACK_Z - 0.5);
   app.root.addChild(camera);
 
   // ── Interactivos ──
