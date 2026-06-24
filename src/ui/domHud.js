@@ -36,7 +36,7 @@ function renderActions(transaction) {
 }
 
 export function createDomHud(root, runController) {
-  root.innerHTML = `<div class="hud"></div>`;
+  root.innerHTML = `<div class="controls-hint">Arrastra para mirar &middot; Click objetos para usar &middot; Scroll para zoom</div><div class="hud"></div>`;
   const hud = root.querySelector(".hud");
 
   function render(snapshot) {
