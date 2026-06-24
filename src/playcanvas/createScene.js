@@ -1,10 +1,10 @@
 import * as pc from "playcanvas";
 import { CUSTOMERS } from "../content/customers.js";
-import { createOrbitCamera } from "./orbitCamera.js";
+import { createFirstPersonCamera } from "./firstPersonCamera.js";
 
 // ── helpers ──────────────────────────────────────────────
 
-function makeMaterial(name, color, opts = {}) {
+function makeMat(name, color, opts = {}) {
   const m = new pc.StandardMaterial();
   m.name = name;
   m.diffuse = color;
@@ -20,41 +20,50 @@ function makeMaterial(name, color, opts = {}) {
   return m;
 }
 
-function addBox(app, name, pos, scale, material) {
+function addBox(app, name, pos, scale, mat) {
   const e = new pc.Entity(name);
-  e.addComponent("render", { type: "box", material });
+  e.addComponent("render", { type: "box", material: mat });
   e.setLocalPosition(pos.x, pos.y, pos.z);
   e.setLocalScale(scale.x, scale.y, scale.z);
   app.root.addChild(e);
   return e;
 }
 
-function addPlane(app, name, pos, scale, material, rotation = { x: -90, y: 0, z: 0 }) {
+function addPlane(app, name, pos, scale, mat, rot = { x: -90, y: 0, z: 0 }) {
   const e = new pc.Entity(name);
-  e.addComponent("render", { type: "plane", material });
+  e.addComponent("render", { type: "plane", material: mat });
   e.setLocalPosition(pos.x, pos.y, pos.z);
   e.setLocalScale(scale.x, scale.y, scale.z);
-  e.setLocalEulerAngles(rotation.x, rotation.y, rotation.z);
+  e.setLocalEulerAngles(rot.x, rot.y, rot.z);
   app.root.addChild(e);
   return e;
 }
 
-// ── raycast (sin physics) ────────────────────────────────
+// Muro con hueco: 2 cajas laterales + dintel
+function addWallWithHole(app, name, cx, cy, cz, width, height, thickness, holeW, holeH) {
+  const sideW = (width - holeW) / 2;
+  const lintelH = height - holeH;
+  const parts = [];
+  if (sideW > 0.01) {
+    parts.push(addBox(app, `${name}-L`, { x: cx - holeW/2 - sideW/2, y: cy, z: cz }, { x: sideW, y: height, z: thickness }));
+    parts.push(addBox(app, `${name}-R`, { x: cx + holeW/2 + sideW/2, y: cy, z: cz }, { x: sideW, y: height, z: thickness }));
+  }
+  if (lintelH > 0.01) {
+    parts.push(addBox(app, `${name}-top`, { x: cx, y: cy + holeH/2 + lintelH/2, z: cz }, { x: holeW, y: lintelH, z: thickness }));
+  }
+  return parts;
+}
+
+// ── raycast AABB ─────────────────────────────────────────
 
 function rayAABB(ox, oy, oz, dx, dy, dz, cx, cy, cz, hx, hy, hz) {
   const minX = cx - hx, maxX = cx + hx;
   const minY = cy - hy, maxY = cy + hy;
   const minZ = cz - hz, maxZ = cz + hz;
   let tmin = -Infinity, tmax = Infinity;
-
-  for (const [o, d, mn, mx] of [
-    [ox, dx, minX, maxX],
-    [oy, dy, minY, maxY],
-    [oz, dz, minZ, maxZ],
-  ]) {
+  for (const [o, d, mn, mx] of [[ox,dx,minX,maxX],[oy,dy,minY,maxY],[oz,dz,minZ,maxZ]]) {
     if (Math.abs(d) > 1e-8) {
-      const t1 = (mn - o) / d;
-      const t2 = (mx - o) / d;
+      const t1 = (mn - o) / d, t2 = (mx - o) / d;
       tmin = Math.max(tmin, Math.min(t1, t2));
       tmax = Math.min(tmax, Math.max(t1, t2));
     } else if (o < mn || o > mx) return null;
@@ -68,22 +77,12 @@ function pickEntity(cameraEntity, screenX, screenY, interactives) {
   const world = cam.screenToWorld(screenX, screenY, 1);
   const origin = cameraEntity.getPosition();
   const dir = new pc.Vec3().sub2(world, origin).normalize();
-
-  let closest = null;
-  let closestT = Infinity;
+  let closest = null, closestT = Infinity;
   for (const entry of interactives) {
     const pos = entry.entity.getPosition();
     const scl = entry.entity.getLocalScale();
-    const t = rayAABB(
-      origin.x, origin.y, origin.z,
-      dir.x, dir.y, dir.z,
-      pos.x, pos.y, pos.z,
-      scl.x / 2, scl.y / 2, scl.z / 2,
-    );
-    if (t !== null && t < closestT) {
-      closestT = t;
-      closest = entry;
-    }
+    const t = rayAABB(origin.x,origin.y,origin.z, dir.x,dir.y,dir.z, pos.x,pos.y,pos.z, scl.x/2,scl.y/2,scl.z/2);
+    if (t !== null && t < closestT) { closestT = t; closest = entry; }
   }
   return closest;
 }
@@ -95,139 +94,119 @@ export function createScene(canvas, runController) {
     mouse: new pc.Mouse(canvas),
     touch: new pc.TouchDevice(canvas),
   });
-
   app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
   app.setCanvasResolution(pc.RESOLUTION_AUTO);
   app.start();
 
-  // Atmósfera: niebla + cielo oscuro
   app.scene.fog.type = pc.FOG_LINEAR;
   app.scene.fog.color = new pc.Color(0.02, 0.025, 0.04);
-  app.scene.fog.start = 3.5;
-  app.scene.fog.end = 11;
-  app.scene.ambientLight = new pc.Color(0.08, 0.07, 0.06);
+  app.scene.fog.start = 4;
+  app.scene.fog.end = 12;
+  app.scene.ambientLight = new pc.Color(0.1, 0.09, 0.07);
 
   // Materiales
-  const matWarm = makeMaterial("warm", new pc.Color(0.66, 0.52, 0.31));
-  const matCounter = makeMaterial("counter", new pc.Color(0.32, 0.22, 0.15));
-  const matFloor = makeMaterial("floor", new pc.Color(0.14, 0.12, 0.09));
-  const matStreet = makeMaterial("street", new pc.Color(0.06, 0.1, 0.16));
-  const matGlass = makeMaterial("glass", new pc.Color(0.35, 0.55, 0.68), { opacity: 0.25 });
-  const matProduct = makeMaterial("product", new pc.Color(0.72, 0.62, 0.38), {
-    emissive: new pc.Color(0.15, 0.12, 0.06),
-    emissiveIntensity: 0.2,
-  });
-  const matProductGlow = makeMaterial("productGlow", new pc.Color(0.85, 0.75, 0.45), {
-    emissive: new pc.Color(0.5, 0.4, 0.18),
-    emissiveIntensity: 0.7,
-  });
-  const matCustomer = makeMaterial("customer", new pc.Color(0.08, 0.08, 0.1));
-  const matObject = makeMaterial("object", new pc.Color(0.2, 0.18, 0.14));
-  const matCaja = makeMaterial("caja", new pc.Color(0.28, 0.24, 0.16), {
-    emissive: new pc.Color(0.08, 0.06, 0.02),
-    emissiveIntensity: 0.3,
-  });
-  const matLibreta = makeMaterial("libreta", new pc.Color(0.12, 0.1, 0.07));
-  const matRadio = makeMaterial("radio", new pc.Color(0.25, 0.22, 0.18));
-  const matGato = makeMaterial("gato", new pc.Color(0.35, 0.3, 0.22));
+  const matWall = makeMat("wall", new pc.Color(0.38, 0.32, 0.22));
+  const matFloor = makeMat("floor", new pc.Color(0.16, 0.14, 0.1));
+  const matCeiling = makeMat("ceiling", new pc.Color(0.22, 0.18, 0.12));
+  const matCounter = makeMat("counter", new pc.Color(0.32, 0.22, 0.15));
+  const matStreet = makeMat("street", new pc.Color(0.05, 0.08, 0.13));
+  const matGlass = makeMat("glass", new pc.Color(0.3, 0.5, 0.65), { opacity: 0.2 });
+  const matProduct = makeMat("product", new pc.Color(0.72, 0.62, 0.38), { emissive: new pc.Color(0.12, 0.1, 0.05), emissiveIntensity: 0.15 });
+  const matProductGlow = makeMat("productGlow", new pc.Color(0.85, 0.75, 0.45), { emissive: new pc.Color(0.6, 0.45, 0.2), emissiveIntensity: 0.8 });
+  const matCustomer = makeMat("customer", new pc.Color(0.08, 0.08, 0.1));
+  const matObject = makeMat("object", new pc.Color(0.22, 0.19, 0.15));
+  const matCaja = makeMat("caja", new pc.Color(0.25, 0.22, 0.16), { emissive: new pc.Color(0.06, 0.05, 0.02), emissiveIntensity: 0.2 });
+  const matLibreta = makeMat("libreta", new pc.Color(0.12, 0.1, 0.07));
+  const matRadio = makeMat("radio", new pc.Color(0.2, 0.18, 0.15));
+  const matGato = makeMat("gato", new pc.Color(0.3, 0.26, 0.18));
 
-  // Geometría
-  addBox(app, "back wall", { x: 0, y: 1.4, z: -2.15 }, { x: 4.8, y: 2.8, z: 0.1 }, matWarm);
-  addBox(app, "side wall L", { x: -2.35, y: 1.4, z: -1 }, { x: 0.1, y: 2.8, z: 2.4 }, matWarm);
-  addBox(app, "side wall R", { x: 2.35, y: 1.4, z: -1 }, { x: 0.1, y: 2.8, z: 2.4 }, matWarm);
-  addPlane(app, "floor", { x: 0, y: 0, z: -0.5 }, { x: 4.8, y: 3.2 }, matFloor);
-  addBox(app, "street", { x: 0, y: 0.2, z: -3.1 }, { x: 5.8, y: 0.08, z: 1.9 }, matStreet);
-  addBox(app, "service window", { x: 0, y: 1.55, z: -2.05 }, { x: 2.2, y: 1.15, z: 0.06 }, matGlass);
-  addBox(app, "counter", { x: 0, y: 0.35, z: -0.65 }, { x: 4.6, y: 0.35, z: 1.0 }, matCounter);
-  addBox(app, "shelf back", { x: 0, y: 1.1, z: -2.05 }, { x: 3.8, y: 0.5, z: 0.08 }, matCounter);
+  // ── Kiosco cerrado: 2.5 ancho x 2.5 profundo x 2.4 alto ──
+  const W = 2.5, D = 2.5, H = 2.4;
+  const HOLE_W = 1.8, HOLE_H = 1.0;
 
-  const caja = addBox(app, "cash register", { x: -1.25, y: 0.78, z: -0.7 }, { x: 0.55, y: 0.25, z: 0.42 }, matCaja);
-  const libreta = addBox(app, "notebook", { x: 1.2, y: 0.72, z: -0.5 }, { x: 0.58, y: 0.06, z: 0.42 }, matLibreta);
-  const radio = addBox(app, "radio", { x: 1.9, y: 0.82, z: -1.25 }, { x: 0.34, y: 0.3, z: 0.25 }, matRadio);
-  const gato = addBox(app, "cat", { x: -1.95, y: 0.76, z: -1.0 }, { x: 0.38, y: 0.16, z: 0.22 }, matGato);
+  addPlane(app, "floor", { x: 0, y: 0, z: -0.75 }, { x: W, y: D }, matFloor);
+  addPlane(app, "ceiling", { x: 0, y: H, z: -0.75 }, { x: W, y: D }, matCeiling, { x: 90, y: 0, z: 0 });
 
-  const customer = addBox(
-    app, "customer silhouette",
-    { x: 0, y: 1.12, z: -2.42 },
-    { x: 0.55, y: 1.25, z: 0.08 },
-    matCustomer,
-  );
+  // Pared trasera con ventanilla
+  addWallWithHole(app, "front-wall", 0, HOLE_H/2 + 0.4, -D/2 - 0.5, W, H, 0.1, HOLE_W, HOLE_H);
+  addBox(app, "window-glass", { x: 0, y: HOLE_H/2 + 0.4, z: -D/2 - 0.5 }, { x: HOLE_W, y: HOLE_H, z: 0.02 }, matGlass);
+  addBox(app, "window-sill", { x: 0, y: 0.4, z: -D/2 - 0.5 }, { x: W, y: 0.8, z: 0.1 }, matWall);
 
-  // Productos (guardamos referencia para highlight)
+  // Pared izquierda, derecha, frontal (con puerta)
+  addBox(app, "wall-left", { x: -W/2, y: H/2, z: -0.75 }, { x: 0.1, y: H, z: D }, matWall);
+  addBox(app, "wall-right", { x: W/2, y: H/2, z: -0.75 }, { x: 0.1, y: H, z: D }, matWall);
+  addWallWithHole(app, "back-wall", 0, 1.1, 0.75, W, H, 0.1, 0.9, 2.0);
+
+  // Mostrador + estante
+  addBox(app, "counter", { x: 0, y: 0.45, z: -1.0 }, { x: 2.0, y: 0.4, z: 0.5 }, matCounter);
+  addBox(app, "shelf", { x: 0, y: 1.3, z: -D/2 - 0.4 }, { x: 2.0, y: 0.4, z: 0.08 }, matCounter);
+
+  // Objetos
+  const caja = addBox(app, "caja", { x: -0.65, y: 0.75, z: -1.05 }, { x: 0.4, y: 0.2, z: 0.3 }, matCaja);
+  const libreta = addBox(app, "libreta", { x: 0.6, y: 0.68, z: -0.95 }, { x: 0.45, y: 0.05, z: 0.32 }, matLibreta);
+  const radio = addBox(app, "radio", { x: 0.9, y: 0.72, z: -1.2 }, { x: 0.28, y: 0.22, z: 0.2 }, matRadio);
+  const gato = addBox(app, "gato", { x: -0.95, y: 0.68, z: -1.3 }, { x: 0.3, y: 0.14, z: 0.18 }, matGato);
+
+  // Productos en estante
   const productEntities = {
-    cafe: addBox(app, "product-cafe", { x: -1.7, y: 0.85, z: -1.3 }, { x: 0.28, y: 0.22, z: 0.28 }, matProduct),
-    "cigarros-ficticios": addBox(app, "product-cigarros", { x: -1.15, y: 0.85, z: -1.3 }, { x: 0.28, y: 0.22, z: 0.28 }, matProduct),
-    chicles: addBox(app, "product-chicles", { x: -0.6, y: 0.85, z: -1.3 }, { x: 0.28, y: 0.22, z: 0.28 }, matProduct),
-    vela: addBox(app, "product-vela", { x: -0.05, y: 0.85, z: -1.3 }, { x: 0.28, y: 0.22, z: 0.28 }, matProduct),
+    cafe: addBox(app, "product-cafe", { x: -0.75, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    "cigarros-ficticios": addBox(app, "product-cigarros", { x: -0.35, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    chicles: addBox(app, "product-chicles", { x: 0.1, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
+    vela: addBox(app, "product-vela", { x: 0.55, y: 1.12, z: -D/2 - 0.44 }, { x: 0.2, y: 0.18, z: 0.2 }, matProduct),
   };
-  const productOriginalY = {};
-  for (const [id, e] of Object.entries(productEntities)) {
-    productOriginalY[id] = e.getLocalPosition().y;
-  }
+  const productBaseY = {};
+  for (const [id, e] of Object.entries(productEntities)) productBaseY[id] = e.getLocalPosition().y;
 
-  // Cámara + orbit
-  const camera = new pc.Entity("camera");
-  camera.addComponent("camera", {
-    clearColor: new pc.Color(0.02, 0.025, 0.04),
-    fov: 50,
-    farClip: 20,
-  });
-  app.root.addChild(camera);
+  // Cliente afuera
+  const customer = addBox(app, "customer", { x: 0, y: 0.9, z: -D/2 - 1.2 }, { x: 0.45, y: 1.1, z: 0.06 }, matCustomer);
 
-  // Luz interior (cambia con maldición)
-  const interiorLight = new pc.Entity("interior light");
-  interiorLight.addComponent("light", {
-    type: "omni",
-    color: new pc.Color(1.0, 0.78, 0.46),
-    intensity: 1.8,
-    range: 6,
-  });
-  interiorLight.setLocalPosition(-1.3, 2.2, 0.4);
+  // Calle
+  addPlane(app, "street", { x: 0, y: 0.01, z: -D/2 - 2.5 }, { x: 8, y: 6 }, matStreet);
+
+  // ── Luces ──
+  const interiorLight = new pc.Entity("interior-light");
+  interiorLight.addComponent("light", { type: "omni", color: new pc.Color(1.0, 0.78, 0.46), intensity: 2.2, range: 5 });
+  interiorLight.setLocalPosition(0, H - 0.3, -0.5);
   app.root.addChild(interiorLight);
 
-  // Luz calle (fría)
-  const streetLight = new pc.Entity("street light");
-  streetLight.addComponent("light", {
-    type: "omni",
-    color: new pc.Color(0.28, 0.42, 0.65),
-    intensity: 1.2,
-    range: 5,
-  });
-  streetLight.setLocalPosition(1.4, 2.1, -2.8);
+  const streetLight = new pc.Entity("street-light");
+  streetLight.addComponent("light", { type: "omni", color: new pc.Color(0.25, 0.4, 0.6), intensity: 1.5, range: 6 });
+  streetLight.setLocalPosition(1.5, 2.0, -D/2 - 2.5);
   app.root.addChild(streetLight);
 
-  // Luz del mostrador (spot cálida)
-  const counterLight = new pc.Entity("counter light");
-  counterLight.addComponent("light", {
-    type: "spot",
-    color: new pc.Color(0.9, 0.7, 0.4),
-    intensity: 1.0,
-    range: 4,
-    innerConeAngle: 35,
-    outerConeAngle: 50,
-  });
-  counterLight.setLocalPosition(0, 2.4, 0.8);
-  counterLight.setLocalEulerAngles(65, 0, 0);
-  app.root.addChild(counterLight);
+  // ── Cámara primera persona ──
+  const camera = new pc.Entity("camera");
+  camera.addComponent("camera", { clearColor: new pc.Color(0.02, 0.025, 0.04), fov: 55, farClip: 20 });
+  camera.setLocalPosition(0, 1.55, 0.3);
+  app.root.addChild(camera);
 
-  // ── interacción 3D ────────────────────────────────────
-
+  // ── Interactivos ──
   const interactives = [
-    { entity: caja, productId: null, action: "charge", label: "Caja" },
-    { entity: libreta, productId: null, action: "notebook", label: "Libreta" },
-    { entity: radio, productId: null, action: "radio", label: "Radio" },
-    { entity: gato, productId: null, action: "cat", label: "Gato" },
-    { entity: productEntities.cafe, productId: "cafe", action: null, label: "Café" },
-    { entity: productEntities["cigarros-ficticios"], productId: "cigarros-ficticios", action: null, label: "Cigarros" },
-    { entity: productEntities.chicles, productId: "chicles", action: null, label: "Chicles" },
-    { entity: productEntities.vela, productId: "vela", action: null, label: "Vela" },
+    { entity: caja, action: "charge", label: "Caja" },
+    { entity: libreta, action: "notebook", label: "Libreta" },
+    { entity: radio, action: "radio", label: "Radio" },
+    { entity: gato, action: "cat", label: "Gato" },
+    { entity: productEntities.cafe, productId: "cafe", label: "Café" },
+    { entity: productEntities["cigarros-ficticios"], productId: "cigarros-ficticios", label: "Cigarros" },
+    { entity: productEntities.chicles, productId: "chicles", label: "Chicles" },
+    { entity: productEntities.vela, productId: "vela", label: "Vela" },
   ];
+
+  const originalMats = new Map();
+  for (const entry of interactives) originalMats.set(entry.entity, entry.entity.render.material);
+
+  // Highlight: cambia material a glow, restaura después
+  const highlightTimers = new Map();
+  function highlight(entity, duration = 0.4) {
+    const orig = originalMats.get(entity);
+    highlightTimers.set(entity, { time: duration, total: duration, orig });
+    entity.render.material = matProductGlow;
+  }
 
   function handleClick(screenX, screenY) {
     const hit = pickEntity(camera, screenX, screenY, interactives);
     if (!hit) return;
-
-    flashEntity(hit.entity);
+    highlight(hit.entity);
 
     if (hit.productId) {
       runController.selectProduct(hit.productId);
@@ -236,41 +215,28 @@ export function createScene(canvas, runController) {
     } else if (hit.action === "notebook") {
       const snap = runController.getSnapshot();
       const tx = snap.currentTransaction;
-      if (tx?.actions.openNotebook) {
-        runController.chooseAction("openNotebook");
-      } else if (tx?.actions.credit) {
-        runController.chooseAction("credit");
-      }
-    } else if (hit.action === "radio") {
-      flashEntity(radio, 0.5);
-    } else if (hit.action === "cat") {
-      flashEntity(gato, 0.4);
+      if (tx?.actions.openNotebook) runController.chooseAction("openNotebook");
+      else if (tx?.actions.credit) runController.chooseAction("credit");
     }
   }
 
-  const orbit = createOrbitCamera(app, camera, { x: 0, y: 1.1, z: -1.2 }, {
-    distance: 4.5,
+  createFirstPersonCamera(app, camera, {
+    bounds: { minX: -W/2 + 0.3, maxX: W/2 - 0.3, minZ: -D/2 + 0.3, maxZ: 0.5 },
     onClick: handleClick,
   });
 
-  // ── feedback visual ───────────────────────────────────
-
-  const flashTimers = new Map();
-  function flashEntity(entity, duration = 0.25) {
-    flashTimers.set(entity, { time: duration, total: duration });
-  }
-
+  // ── Update ──
   app.on("update", (dt) => {
-    // Flash decay
-    for (const [entity, f] of flashTimers) {
-      f.time -= dt;
-      if (f.time <= 0) {
-        flashTimers.delete(entity);
-        entity.setLocalScale(1, 1, 1);
-      } else {
-        const t = f.time / f.total;
-        const s = 1 + 0.25 * t;
-        entity.setLocalScale(s, s, s);
+    // Highlight decay
+    for (const [entity, h] of highlightTimers) {
+      h.time -= dt;
+      if (h.time <= 0) {
+        highlightTimers.delete(entity);
+        if (!runController.getSnapshot().state.selectedProductIds.includes(
+          Object.entries(productEntities).find(([, e]) => e === entity)?.[0]
+        )) {
+          entity.render.material = h.orig;
+        }
       }
     }
 
@@ -278,16 +244,19 @@ export function createScene(canvas, runController) {
     const snap = runController.getSnapshot();
     for (const [id, e] of Object.entries(productEntities)) {
       const selected = snap.state.selectedProductIds.includes(id);
-      const baseY = productOriginalY[id];
-      const y = selected ? baseY + 0.12 + Math.sin(app.time * 3) * 0.02 : baseY;
+      const baseY = productBaseY[id];
+      const y = selected ? baseY + 0.08 + Math.sin(app.time * 3) * 0.015 : baseY;
       const p = e.getLocalPosition();
       e.setLocalPosition(p.x, y, p.z);
-      e.render.material = selected ? matProductGlow : matProduct;
+      if (selected && e.render.material !== matProductGlow) {
+        e.render.material = matProductGlow;
+      } else if (!selected && e.render.material === matProductGlow && !highlightTimers.has(e)) {
+        e.render.material = matProduct;
+      }
     }
   });
 
-  // ── state subscription ────────────────────────────────
-
+  // ── State ──
   function customerColor(snapshot) {
     const id = snapshot.currentTransaction?.customerId;
     const hex = CUSTOMERS[id]?.color ?? "#1a1a1a";
@@ -300,15 +269,14 @@ export function createScene(canvas, runController) {
     matCustomer.update();
     customer.enabled = Boolean(snapshot.currentTransaction);
 
-    // Maldición → luz interior más roja y débil
     const curse = Math.min(snapshot.state.curse, 8);
-    const r = 1.0 - curse * 0.04;
-    const g = 0.78 - curse * 0.06;
-    const b = 0.46 - curse * 0.05;
-    const intensity = 1.8 - curse * 0.08;
     const light = interiorLight.light;
-    light.color = new pc.Color(Math.max(0.3, r), Math.max(0.2, g), Math.max(0.15, b));
-    light.intensity = Math.max(0.4, intensity);
+    light.color = new pc.Color(
+      Math.max(0.3, 1.0 - curse * 0.04),
+      Math.max(0.2, 0.78 - curse * 0.06),
+      Math.max(0.15, 0.46 - curse * 0.05),
+    );
+    light.intensity = Math.max(0.5, 2.2 - curse * 0.1);
   });
 
   window.addEventListener("resize", () => app.resizeCanvas());
