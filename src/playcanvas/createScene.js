@@ -1,6 +1,8 @@
 import * as pc from "playcanvas";
 import { CUSTOMERS } from "../content/customers.js";
 import { createFirstPersonCamera } from "./firstPersonCamera.js";
+import { playClick, playTicket, playCoin, playError, playCat, startRain, stopRain } from "../game/audio.js";
+import { getRadioLine } from "../content/radio.js";
 
 // ── helpers ──────────────────────────────────────────────
 
@@ -163,6 +165,18 @@ export function createScene(canvas, runController) {
   // Calle
   addPlane(app, "street", { x: 0, y: 0.01, z: -D/2 - 2.5 }, { x: 8, y: 6 }, matStreet);
 
+  const rainDrops = [];
+  const RAIN_COUNT = 60;
+  const matRain = makeMat("rain", new pc.Color(0.5, 0.6, 0.8), { opacity: 0.4 });
+  for (let i = 0; i < RAIN_COUNT; i++) {
+    const drop = addBox(app, `rain-${i}`, {
+      x: (Math.random() - 0.5) * 7,
+      y: Math.random() * 4 + 2,
+      z: -D/2 - 1 - Math.random() * 4,
+    }, { x: 0.01, y: 0.15, z: 0.01 }, matRain);
+    rainDrops.push(drop);
+  }
+
   // ── Luces ──
   const interiorLight = new pc.Entity("interior-light");
   interiorLight.addComponent("light", { type: "omni", color: new pc.Color(1.0, 0.78, 0.46), intensity: 2.2, range: 5 });
@@ -207,6 +221,7 @@ export function createScene(canvas, runController) {
     const hit = pickEntity(camera, screenX, screenY, interactives);
     if (!hit) return;
     highlight(hit.entity);
+    playClick();
 
     if (hit.productId) {
       runController.selectProduct(hit.productId);
@@ -217,6 +232,13 @@ export function createScene(canvas, runController) {
       const tx = snap.currentTransaction;
       if (tx?.actions.openNotebook) runController.chooseAction("openNotebook");
       else if (tx?.actions.credit) runController.chooseAction("credit");
+    } else if (hit.action === "radio") {
+      const snap = runController.getSnapshot();
+      const line = getRadioLine(snap.state.curse);
+      runController.getSnapshot();
+      console.log("[RADIO]", line);
+    } else if (hit.action === "cat") {
+      playCat();
     }
   }
 
@@ -227,7 +249,6 @@ export function createScene(canvas, runController) {
 
   // ── Update ──
   app.on("update", (dt) => {
-    // Highlight decay
     for (const [entity, h] of highlightTimers) {
       h.time -= dt;
       if (h.time <= 0) {
@@ -240,8 +261,19 @@ export function createScene(canvas, runController) {
       }
     }
 
-    // Productos seleccionados: flotan + glow
+    for (const drop of rainDrops) {
+      const p = drop.getLocalPosition();
+      p.y -= 6 * dt;
+      if (p.y < 0.05) {
+        p.y = 4 + Math.random() * 2;
+        p.x = (Math.random() - 0.5) * 7;
+        p.z = -D/2 - 1 - Math.random() * 4;
+      }
+      drop.setLocalPosition(p.x, p.y, p.z);
+    }
+
     const snap = runController.getSnapshot();
+
     for (const [id, e] of Object.entries(productEntities)) {
       const selected = snap.state.selectedProductIds.includes(id);
       const baseY = productBaseY[id];
@@ -254,6 +286,12 @@ export function createScene(canvas, runController) {
         e.render.material = matProduct;
       }
     }
+
+    const curse = Math.min(snap.state.curse, 8);
+    const gatoVis = 0.3 + Math.sin(app.time * 1.5) * 0.1;
+    matGato.emissive = new pc.Color(curse > 3 ? gatoVis : 0, 0, 0);
+    matGato.emissiveIntensity = curse > 3 ? 0.5 : 0;
+    matGato.update();
   });
 
   // ── State ──
@@ -263,11 +301,28 @@ export function createScene(canvas, runController) {
     return pc.Color.fromString(hex);
   }
 
+  let lastTicketId = null;
   const unsubscribe = runController.subscribe((snapshot) => {
     const color = customerColor(snapshot);
     matCustomer.diffuse = color;
     matCustomer.update();
     customer.enabled = Boolean(snapshot.currentTransaction);
+
+    if (snapshot.state.lastTicket && snapshot.state.lastTicket.transactionId !== lastTicketId) {
+      lastTicketId = snapshot.state.lastTicket.transactionId;
+      if (snapshot.phase === "playing") {
+        const action = snapshot.state.lastTicket.actionId;
+        if (action === "charge") { playTicket(); playCoin(); }
+        else if (action === "cancel" || action === "give") playError();
+        else playTicket();
+      }
+    }
+
+    if (snapshot.phase === "playing") {
+      startRain();
+    } else {
+      stopRain();
+    }
 
     const curse = Math.min(snapshot.state.curse, 8);
     const light = interiorLight.light;
