@@ -143,7 +143,7 @@ function moveToward(current, target, maxDelta) {
   const delta = new pc.Vec3().sub2(target, current);
   const dist = delta.length();
   if (dist <= maxDelta || dist === 0) return target.clone();
-  return current.clone().add(delta.scale(maxDelta / dist));
+  return current.clone().add(delta.mulScalar(maxDelta / dist));
 }
 
 function addWallWithHole(app, cx, cz, width, height, thickness, holeW, holeH, sillH, material) {
