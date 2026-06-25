@@ -5,6 +5,40 @@ function getCtx() {
   return ctx;
 }
 
+function bitcrushCurve(steps = 32, samples = 256) {
+  const curve = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const x = (i / (samples - 1)) * 2 - 1;
+    curve[i] = Math.round(x * steps) / steps;
+  }
+  return curve;
+}
+
+export function createRetroVoiceChain(c, destination) {
+  const input = c.createGain();
+  const band = c.createBiquadFilter();
+  const low = c.createBiquadFilter();
+  const crush = c.createWaveShaper();
+  const output = c.createGain();
+
+  input.gain.value = 1.15;
+  band.type = "bandpass";
+  band.frequency.value = 1700;
+  band.Q.value = 0.7;
+  low.type = "lowpass";
+  low.frequency.value = 5200;
+  low.Q.value = 0.4;
+  crush.curve = bitcrushCurve();
+  output.gain.value = 0.85;
+
+  input.connect(band);
+  band.connect(low);
+  low.connect(crush);
+  crush.connect(output);
+  output.connect(destination);
+  return input;
+}
+
 // Bus de audio: todo pasa por master; sfx y ambient cuelgan de él. Sliders mueven estos.
 let bus = null;
 function getBus() {
@@ -126,7 +160,7 @@ export function playVoice(url) {
     .then((buffer) => {
       const src = c.createBufferSource();
       src.buffer = buffer;
-      src.connect(getBus().voice);
+      src.connect(createRetroVoiceChain(c, getBus().voice));
       src.onended = () => { if (voiceSource === src) voiceSource = null; };
       src.start();
       voiceSource = src;
