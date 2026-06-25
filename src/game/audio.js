@@ -168,11 +168,15 @@ export function playVoice(url) {
     .catch(() => {});
 }
 
+export function isVoicePlaying() {
+  return voiceSource !== null;
+}
+
 let rainSource = null;
 export function startRain() {
   if (rainSource) return;
   const c = getCtx();
-  rainSource = { src: null, g: null, gain: 0.5 }; // gain previo al load
+  rainSource = { src: null, g: null, gain: 0.34 }; // gain previo al load
   loadClip(c, "/assets/sounds/rain.mp3")
     .then((buffer) => {
       if (!rainSource) return; // se detuvo antes de cargar
@@ -212,8 +216,8 @@ export function playThunder() {
       const fade = Math.min(0.8, dur * 0.3); // fade out al final
       const t = c.currentTime;
       const g = c.createGain();
-      g.gain.setValueAtTime(0.9, t);
-      g.gain.setValueAtTime(0.9, t + dur - fade);
+      g.gain.setValueAtTime(0.6, t);
+      g.gain.setValueAtTime(0.6, t + dur - fade);
       g.gain.linearRampToValueAtTime(0.0001, t + dur);
       src.connect(g); g.connect(getBus().ambient);
       src.start(t); src.stop(t + dur + 0.05);

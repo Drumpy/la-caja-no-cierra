@@ -184,6 +184,20 @@ export function createDomHud(root, runController) {
     localStorage.setItem(`lcnc.vol.${ch}`, String(v));
   });
 
+  // HUD oculto por defecto (modo inmersivo: se juega clickeando los objetos 3D).
+  // "I" lo muestra/oculta. En menús (título/cierre/fin) siempre visible: es la única navegación.
+  let hudVisible = false;
+  let currentPhase = "title";
+  function applyHudVisibility() {
+    root.style.display = currentPhase !== "playing" || hudVisible ? "" : "none";
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "KeyI") {
+      hudVisible = !hudVisible;
+      applyHudVisibility();
+    }
+  });
+
   let curse = 0;
   let lastCustomerId = null;
   let radioOn = false;
@@ -201,6 +215,8 @@ export function createDomHud(root, runController) {
   }, 14000);
 
   function render(snapshot) {
+    currentPhase = snapshot.phase;
+    applyHudVisibility();
     if (snapshot.phase === "title") {
       hud.innerHTML = renderTitleScreen();
       radioOn = false;

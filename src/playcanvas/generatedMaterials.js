@@ -66,6 +66,9 @@ export function createKioskMaterials(app) {
     wood: texturedMat(app, "wood-counter", new pc.Color(0.35, 0.23, 0.13), "wood-counter.png", {
       tiling: { u: 2.4, v: 1 },
     }),
+    windowMetal: texturedMat(app, "window-metal", new pc.Color(0.08, 0.085, 0.08), "window-metal.png", {
+      tiling: { u: 1, v: 1 },
+    }),
     products: {
       cafe: texturedMat(app, "product-cafe", new pc.Color(0.45, 0.28, 0.15), "product-cafe.png"),
       "cigarros-ficticios": texturedMat(

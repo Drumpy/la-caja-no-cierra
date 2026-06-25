@@ -1,9 +1,10 @@
 import * as pc from "playcanvas";
 import { CUSTOMERS } from "../content/customers.js";
-import { playCat, playClick, playCoin, playError, playTicket, playThunder, playVoice, startRain, stopRain } from "../game/audio.js";
+import { playCat, playClick, playCoin, playError, playTicket, playThunder, playVoice, startRain, stopRain, isVoicePlaying } from "../game/audio.js";
 import { getRadioLine } from "../content/radio.js";
 import { createTaxistaWalkMaterials } from "./characterMaterials.js";
 import { createFirstPersonCamera } from "./firstPersonCamera.js";
+import { applyRetroFilter } from "./retroFilter.js";
 import { createKioskMaterials, makeMat } from "./generatedMaterials.js";
 
 // Transacciones con clip de voz en /audio/voices/<id>.mp3.
@@ -18,12 +19,122 @@ function addBox(app, name, pos, scale, material) {
   return entity;
 }
 
+function addChildBox(parent, name, pos, scale, material) {
+  const entity = new pc.Entity(name);
+  entity.addComponent("render", { type: "box", material });
+  entity.setLocalPosition(pos.x, pos.y, pos.z);
+  entity.setLocalScale(scale.x, scale.y, scale.z);
+  parent.addChild(entity);
+  return entity;
+}
+
 function addPlane(app, name, pos, scale, material, rot = { x: -90, y: 0, z: 0 }) {
   const entity = new pc.Entity(name);
   entity.addComponent("render", { type: "plane", material });
   entity.setLocalPosition(pos.x, pos.y, pos.z);
   entity.setLocalScale(scale.x, scale.y ?? 1, scale.z ?? 1);
   entity.setLocalEulerAngles(rot.x, rot.y, rot.z);
+  app.root.addChild(entity);
+  return entity;
+}
+
+export function serviceWindowLayout(frontZ, {
+  cx = 0,
+  holeW = 1.28,
+  holeH = 0.95,
+  sillH = 0.95,
+  hatchOffsetX = -0.36,
+  hatchOffsetY = 0.34,
+  hatchW = 0.38,
+  hatchH = 0.3,
+  openAngle = -68,
+} = {}) {
+  const hatch = {
+    cx: cx + hatchOffsetX,
+    cy: sillH + hatchOffsetY,
+    w: hatchW,
+    h: hatchH,
+    openAngle,
+  };
+  return {
+    hole: { cx, cy: sillH + holeH / 2, w: holeW, h: holeH, sillH },
+    hatch,
+    customerTarget: { x: hatch.cx, y: 0.95, z: frontZ - 0.58 },
+  };
+}
+
+export function counterLayout({ width, frontZ, sillH, depth = 0.62 }) {
+  const height = sillH;
+  return {
+    pos: { x: 0, y: height / 2, z: frontZ + depth / 2 },
+    scale: { x: width, y: height, z: depth },
+  };
+}
+
+export function bookshelfLayout({ width, backZ }) {
+  const shelfWidth = width - 0.25;
+  const z = backZ - 0.25;
+  const shelves = [0.75, 1.25, 1.75];
+  return {
+    width: shelfWidth,
+    z,
+    shelves,
+    products: {
+      cafe: { x: -1.05, shelfY: shelves[1], z },
+      chicles: { x: -0.35, shelfY: shelves[1], z },
+      vela: { x: 0.35, shelfY: shelves[1], z },
+      "cigarros-ficticios": { x: 1.05, shelfY: shelves[1], z },
+    },
+  };
+}
+
+export function frontWallPanels(cx, width, height, holeW, holeH, sillH) {
+  const left = cx - width / 2;
+  const right = cx + width / 2;
+  const holeLeft = cx - holeW / 2;
+  const holeRight = cx + holeW / 2;
+  const holeTop = sillH + holeH;
+  return [
+    { name: "sill", x0: left, x1: right, y0: 0, y1: sillH },
+    { name: "left", x0: left, x1: holeLeft, y0: sillH, y1: height },
+    { name: "right", x0: holeRight, x1: right, y0: sillH, y1: height },
+    { name: "top", x0: holeLeft, x1: holeRight, y0: holeTop, y1: height },
+  ].filter((p) => p.x1 > p.x0 && p.y1 > p.y0);
+}
+
+function addFrontWallSurface(app, cx, cz, width, height, thickness, holeW, holeH, sillH, material) {
+  const wallLeft = cx - width / 2;
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+
+  for (const p of frontWallPanels(cx, width, height, holeW, holeH, sillH)) {
+    const base = positions.length / 3;
+    const corners = [
+      [p.x0, p.y0],
+      [p.x1, p.y0],
+      [p.x1, p.y1],
+      [p.x0, p.y1],
+    ];
+    for (const [x, y] of corners) {
+      positions.push(x, y, 0);
+      normals.push(0, 0, 1);
+      uvs.push((x - wallLeft) / width, y / height);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  const geometry = new pc.Geometry();
+  geometry.positions = positions;
+  geometry.normals = normals;
+  geometry.uvs = uvs;
+  geometry.indices = indices;
+  const mesh = pc.Mesh.fromGeometry(app.graphicsDevice, geometry);
+  const entity = new pc.Entity("front-wall-surface");
+  entity.addComponent("render", { type: "asset" });
+  entity.render.meshInstances = [new pc.MeshInstance(mesh, material, entity)];
+  entity.setLocalPosition(0, 0, cz + thickness / 2 + 0.002);
   app.root.addChild(entity);
   return entity;
 }
@@ -44,6 +155,45 @@ function addWallWithHole(app, cx, cz, width, height, thickness, holeW, holeH, si
   const topH = height - (holeCY + holeH / 2);
   addBox(app, "front-wall-top", { x: cx, y: height - topH / 2, z: cz }, { x: holeW, y: topH, z: thickness }, material);
   addBox(app, "front-wall-sill", { x: cx, y: sillH / 2, z: cz }, { x: width, y: sillH, z: thickness }, material);
+  addFrontWallSurface(app, cx, cz, width, height, thickness, holeW, holeH, sillH, material);
+}
+
+function addServiceWindow(app, layout, z, material) {
+  const { hole, hatch } = layout;
+  const bar = 0.035;
+  const grateZ = z + 0.075;
+  const hatchLeft = hatch.cx - hatch.w / 2;
+  const hatchRight = hatch.cx + hatch.w / 2;
+  const hatchBottom = hatch.cy - hatch.h / 2;
+  const hatchTop = hatch.cy + hatch.h / 2;
+
+  addBox(app, "window-frame-top", { x: hole.cx, y: hole.cy + hole.h / 2, z: grateZ }, { x: hole.w + bar, y: bar, z: 0.035 }, material);
+  addBox(app, "window-frame-bottom", { x: hole.cx, y: hole.cy - hole.h / 2, z: grateZ }, { x: hole.w + bar, y: bar, z: 0.035 }, material);
+  addBox(app, "window-frame-left", { x: hole.cx - hole.w / 2, y: hole.cy, z: grateZ }, { x: bar, y: hole.h + bar, z: 0.035 }, material);
+  addBox(app, "window-frame-right", { x: hole.cx + hole.w / 2, y: hole.cy, z: grateZ }, { x: bar, y: hole.h + bar, z: 0.035 }, material);
+
+  for (let i = 1; i <= 4; i++) {
+    const x = hole.cx - hole.w / 2 + (hole.w * i) / 5;
+    if (x > hatchLeft && x < hatchRight) continue;
+    addBox(app, `window-grate-v-${i}`, { x, y: hole.cy, z: grateZ + 0.005 }, { x: 0.018, y: hole.h, z: 0.02 }, material);
+  }
+  for (let i = 1; i <= 2; i++) {
+    // +0.16: sube los barrotes para que el de arriba no cruce la cara del cliente.
+    const y = hole.cy - hole.h / 2 + (hole.h * i) / 3 + 0.16;
+    if (y > hatchBottom && y < hatchTop) continue;
+    addBox(app, `window-grate-h-${i}`, { x: hole.cx, y, z: grateZ + 0.006 }, { x: hole.w, y: 0.018, z: 0.02 }, material);
+  }
+
+  const door = new pc.Entity("service-hatch-door");
+  door.setLocalPosition(hatch.cx - hatch.w / 2, hatch.cy, grateZ + 0.03);
+  app.root.addChild(door);
+  addChildBox(door, "service-hatch-top", { x: hatch.w / 2, y: hatch.h / 2, z: 0 }, { x: hatch.w, y: 0.024, z: 0.024 }, material);
+  addChildBox(door, "service-hatch-bottom", { x: hatch.w / 2, y: -hatch.h / 2, z: 0 }, { x: hatch.w, y: 0.024, z: 0.024 }, material);
+  addChildBox(door, "service-hatch-right", { x: hatch.w, y: 0, z: 0 }, { x: 0.024, y: hatch.h, z: 0.024 }, material);
+  addChildBox(door, "service-hatch-left", { x: 0, y: 0, z: 0 }, { x: 0.024, y: hatch.h, z: 0.024 }, material);
+  addChildBox(door, "service-hatch-grate-v", { x: hatch.w / 2, y: 0, z: 0.004 }, { x: 0.014, y: hatch.h, z: 0.018 }, material);
+  addChildBox(door, "service-hatch-grate-h", { x: hatch.w / 2, y: 0, z: 0.005 }, { x: hatch.w, y: 0.014, z: 0.018 }, material);
+  return door;
 }
 
 function rayAABB(origin, dir, center, half) {
@@ -73,8 +223,8 @@ function pickEntity(cameraEntity, screenX, screenY, interactives) {
   // Hitbox más grande que el arte: tolera el click impreciso (forgiveness).
   const PAD = 0.06;
   for (const entry of interactives) {
-    const pos = entry.entity.getPosition();
-    const scale = entry.entity.getLocalScale();
+    const pos = entry.pickPosition ?? entry.entity.getPosition();
+    const scale = entry.pickScale ?? entry.entity.getLocalScale();
     const t = rayAABB(origin, dir, pos, {
       x: scale.x / 2 + PAD,
       y: scale.y / 2 + PAD,
@@ -128,6 +278,7 @@ export function createScene(canvas, runController) {
   const matLibreta = makeMat("libreta", new pc.Color(0.12, 0.1, 0.07));
   const matRadio = makeMat("radio", new pc.Color(0.2, 0.18, 0.15));
   const matGato = makeMat("gato", new pc.Color(0.3, 0.26, 0.18));
+  const matWindowMetal = generated.windowMetal;
   // Lluvia auto-iluminada: hilos fríos visibles aunque afuera esté en negro.
   const matRain = makeMat("rain", new pc.Color(0.5, 0.6, 0.8), {
     opacity: 0.55,
@@ -139,45 +290,51 @@ export function createScene(canvas, runController) {
   const W = 3.5;
   const D = 4.5;
   const H = 2.6;
-  const HOLE_W = 1.0;
-  const HOLE_H = 0.8;
-  const SILL_H = 1.1;
   const FRONT_Z = -D / 2;
   const BACK_Z = D / 2;
-  const WIN_CY = SILL_H + HOLE_H / 2;
+  const WINDOW = serviceWindowLayout(FRONT_Z);
+  const HOLE_W = WINDOW.hole.w;
+  const HOLE_H = WINDOW.hole.h;
+  const SILL_H = WINDOW.hole.sillH;
+  const WIN_CY = WINDOW.hole.cy;
 
   addBox(app, "floor", { x: 0, y: -0.025, z: 0 }, { x: W, y: 0.05, z: D }, generated.floor);
   addBox(app, "ceiling", { x: 0, y: H - 0.02, z: 0 }, { x: W, y: 0.04, z: D }, matCeiling);
   addWallWithHole(app, 0, FRONT_Z, W, H, 0.1, HOLE_W, HOLE_H, SILL_H, generated.wall);
+  const serviceHatchDoor = addServiceWindow(app, WINDOW, FRONT_Z, matWindowMetal);
   addBox(app, "wall-left", { x: -W / 2, y: H / 2, z: 0 }, { x: 0.1, y: H, z: D }, generated.wall);
   addBox(app, "wall-right", { x: W / 2, y: H / 2, z: 0 }, { x: 0.1, y: H, z: D }, generated.wall);
   addBox(app, "wall-back", { x: 0, y: H / 2, z: BACK_Z }, { x: W, y: H, z: 0.1 }, generated.wall);
 
-  const counterZ = FRONT_Z + 0.7;
-  const counter = addBox(app, "counter", { x: 0, y: 0.45, z: counterZ }, { x: 2.4, y: 0.4, z: 0.5 }, generated.wood);
-  const backShelfZ = BACK_Z - 0.25;
-  const shelfY = 1.3;
-  addBox(app, "shelf-board", { x: 0, y: shelfY, z: backShelfZ }, { x: 2.4, y: 0.04, z: 0.3 }, generated.wood);
-  addBox(app, "shelf-bracket", { x: 0, y: shelfY - 0.3, z: backShelfZ + 0.1 }, { x: 2.4, y: 0.04, z: 0.04 }, generated.wood);
+  const counterSpec = counterLayout({ width: W, frontZ: FRONT_Z, sillH: SILL_H });
+  const counterZ = counterSpec.pos.z;
+  const counter = addBox(app, "counter", counterSpec.pos, counterSpec.scale, generated.wood);
+ const shelf = bookshelfLayout({ width: W, backZ: BACK_Z });
+ const shelfSideH = shelf.shelves.at(-1) - shelf.shelves[0] + 0.55;
+ const shelfCenterY = (shelf.shelves[0] + shelf.shelves.at(-1)) / 2;
+ addBox(app, "bookshelf-left", { x: -shelf.width / 2, y: shelfCenterY, z: shelf.z }, { x: 0.06, y: shelfSideH, z: 0.32 }, generated.wood);
+ addBox(app, "bookshelf-right", { x: shelf.width / 2, y: shelfCenterY, z: shelf.z }, { x: 0.06, y: shelfSideH, z: 0.32 }, generated.wood);
+ for (const [i, y] of shelf.shelves.entries()) {
+ addBox(app, `bookshelf-board-${i}`, { x: 0, y, z: shelf.z }, { x: shelf.width, y: 0.05, z: 0.32 }, generated.wood);
+ }
 
-  const shelfTopY = shelfY + 0.11;
-  const productEntities = {
-    cafe: addBox(app, "product-cafe", { x: -0.75, y: shelfTopY, z: backShelfZ }, { x: 0.2, y: 0.18, z: 0.2 }, generated.products.cafe),
-    chicles: addBox(app, "product-chicles", { x: -0.25, y: shelfTopY, z: backShelfZ }, { x: 0.2, y: 0.18, z: 0.2 }, generated.products.chicles),
-    vela: addBox(app, "product-vela", { x: 0.25, y: shelfTopY, z: backShelfZ }, { x: 0.2, y: 0.18, z: 0.2 }, generated.products.vela),
-    "cigarros-ficticios": addBox(
-      app,
-      "product-cigarros",
-      { x: -0.45, y: 0.72, z: counterZ - 0.16 },
-      { x: 0.22, y: 0.08, z: 0.28 },
-      generated.products["cigarros-ficticios"],
-    ),
-  };
+ const productEntities = {
+ cafe: addBox(app, "product-cafe", { x: shelf.products.cafe.x, y: shelf.products.cafe.shelfY + 0.12, z: shelf.products.cafe.z }, { x: 0.2, y: 0.18, z: 0.2 }, generated.products.cafe),
+ chicles: addBox(app, "product-chicles", { x: shelf.products.chicles.x, y: shelf.products.chicles.shelfY + 0.12, z: shelf.products.chicles.z }, { x: 0.2, y: 0.18, z: 0.2 }, generated.products.chicles),
+ vela: addBox(app, "product-vela", { x: shelf.products.vela.x, y: shelf.products.vela.shelfY + 0.12, z: shelf.products.vela.z }, { x: 0.2, y: 0.18, z: 0.2 }, generated.products.vela),
+ "cigarros-ficticios": addBox(
+ app,
+ "product-cigarros",
+ { x: shelf.products["cigarros-ficticios"].x, y: shelf.products["cigarros-ficticios"].shelfY + 0.07, z: shelf.products["cigarros-ficticios"].z },
+ { x: 0.22, y: 0.08, z: 0.28 },
+ generated.products["cigarros-ficticios"],
+ ),
+ };
   const productBaseY = Object.fromEntries(
     Object.entries(productEntities).map(([id, entity]) => [id, entity.getLocalPosition().y]),
   );
 
-  const counterTopY = 0.65;
+  const counterTopY = counterSpec.pos.y + counterSpec.scale.y / 2;
   const caja = addBox(app, "caja", { x: -0.85, y: counterTopY + 0.1, z: counterZ }, { x: 0.4, y: 0.2, z: 0.3 }, matCaja);
   const libreta = addBox(app, "libreta", { x: 0.7, y: counterTopY + 0.025, z: counterZ + 0.05 }, { x: 0.45, y: 0.05, z: 0.32 }, matLibreta);
   const radio = addBox(app, "radio", { x: 1.1, y: counterTopY + 0.11, z: counterZ - 0.1 }, { x: 0.28, y: 0.22, z: 0.2 }, matRadio);
@@ -185,7 +342,7 @@ export function createScene(canvas, runController) {
 
   addPlane(app, "street", { x: 0, y: 0.01, z: FRONT_Z - 2.5 }, { x: 8, y: 6 }, matStreet);
   addBox(app, "taxi-glow", { x: 1.1, y: 0.45, z: FRONT_Z - 2.2 }, { x: 1.2, y: 0.28, z: 0.12 }, makeMat("taxi-glow", new pc.Color(0.72, 0.52, 0.18), { emissive: new pc.Color(0.28, 0.18, 0.05), emissiveIntensity: 0.18 }));
-  const CUSTOMER_WINDOW = new pc.Vec3(0, 0.95, FRONT_Z - 0.58);
+  const CUSTOMER_WINDOW = new pc.Vec3(WINDOW.customerTarget.x, WINDOW.customerTarget.y, WINDOW.customerTarget.z);
   const CUSTOMER_ENTRY = new pc.Vec3(-1.15, 0.95, FRONT_Z - 2.65);
   const CUSTOMER_EXIT = new pc.Vec3(1.15, 0.95, FRONT_Z - 2.65);
   const customer = addBox(
@@ -282,21 +439,30 @@ export function createScene(canvas, runController) {
   camera.addComponent("camera", {
     clearColor: new pc.Color(0.004, 0.006, 0.011),
     fov: 55,
+    nearClip: 0.05, // chico: evita que el plano cercano atraviese muebles/pared al pegarse
     farClip: 20,
     toneMapping: pc.TONEMAP_ACES, // rolloff filmico: el bulbo no se quema
     gammaCorrection: pc.GAMMA_SRGB,
   });
-  camera.setLocalPosition(0, 1.55, BACK_Z - 0.5);
+  camera.setLocalPosition(0, 1.55, BACK_Z - 0.75); // delante de la estantería (su rect llega a ~1.62)
   app.root.addChild(camera);
+  applyRetroFilter(app, camera); // filtro VHS / PS1 / analog-horror
 
   const interactives = [
     { entity: caja, action: "charge" },
     { entity: libreta, action: "notebook" },
     { entity: radio, action: "radio" },
     { entity: gato, action: "cat" },
+    {
+      entity: serviceHatchDoor,
+      action: "hatch",
+      pickPosition: new pc.Vec3(WINDOW.hatch.cx, WINDOW.hatch.cy, FRONT_Z + 0.1),
+      pickScale: new pc.Vec3(WINDOW.hatch.w, WINDOW.hatch.h, 0.12),
+    },
     ...Object.entries(productEntities).map(([productId, entity]) => ({ entity, productId })),
   ];
-  const originalMats = new Map(interactives.map((entry) => [entry.entity, entry.entity.render.material]));
+  let hatchOpen = false;
+  const originalMats = new Map(interactives.filter((entry) => entry.entity.render).map((entry) => [entry.entity, entry.entity.render.material]));
   const highlightTimers = new Map();
 
   function highlight(entity, duration = 0.35) {
@@ -307,7 +473,7 @@ export function createScene(canvas, runController) {
   function handleClick(screenX, screenY) {
     const hit = pickEntity(camera, screenX, screenY, interactives);
     if (!hit) return;
-    highlight(hit.entity);
+  if (hit.action !== "hatch") highlight(hit.entity);
     playClick();
 
     if (hit.productId) {
@@ -328,16 +494,32 @@ export function createScene(canvas, runController) {
       return;
     }
 
-    if (hit.action === "radio") {
-      console.log("[RADIO]", getRadioLine(runController.getSnapshot().state.curse));
-      return;
-    }
-
-    if (hit.action === "cat") playCat();
+  if (hit.action === "radio") {
+    console.log("[RADIO]", getRadioLine(runController.getSnapshot().state.curse));
+    return;
   }
 
+  if (hit.action === "hatch") {
+    hatchOpen = !hatchOpen;
+    serviceHatchDoor.setLocalEulerAngles(0, hatchOpen ? WINDOW.hatch.openAngle : 0, 0);
+    return;
+  }
+
+  if (hit.action === "cat") playCat();
+}
+
+  // Mostrador y estantería ocupan todo el ancho jugable: son paredes, no obstáculos sueltos.
+  // Los límites Z frenan al jugador delante de cada uno (standoff PLAYER_R), así nunca se mete
+  // dentro del mueble ni mira "adentro".
+  const PLAYER_R = 0.3;
   createFirstPersonCamera(app, camera, {
-    bounds: { minX: -W / 2 + 0.3, maxX: W / 2 - 0.3, minZ: FRONT_Z + 0.3, maxZ: 0.5 },
+    bounds: {
+      minX: -W / 2 + 0.3,
+      maxX: W / 2 - 0.3,
+      minZ: counterSpec.pos.z + counterSpec.scale.z / 2 + PLAYER_R, // delante del mostrador
+      maxZ: shelf.z - 0.16 - PLAYER_R, // delante de la estantería
+    },
+    radius: PLAYER_R,
     onClick: handleClick,
   });
 
@@ -469,7 +651,8 @@ export function createScene(canvas, runController) {
     let lampK = 1;
     if (flickerBurst > 0) {
       flickerBurst -= dt;
-      lampK = Math.random() < 0.5 ? 0.12 + Math.random() * 0.28 : 0.92 + Math.random() * 0.08;
+      // Parpadeo = la lamparita baja y tiembla en lo bajo, nunca sube de su brillo normal.
+      lampK = 0.15 + Math.random() * 0.4;
     }
     interiorLight.light.intensity = lampBase * lampK;
     bulbMat.emissiveIntensity = 0.5 + lampK * 0.7;
@@ -478,9 +661,13 @@ export function createScene(canvas, runController) {
     // Relámpago: temporizador -> destello (doble parpadeo) -> trueno con retardo.
     strikeTimer -= dt;
     if (strikeTimer <= 0) {
-      flash = 1;
-      strikeTimer = 7 + Math.random() * 12;
-      setTimeout(() => playThunder(), 120 + Math.random() * 400);
+      if (isVoicePlaying()) {
+        strikeTimer = 0.6 + Math.random() * 0.8; // voz del cliente: reintentar pronto, no pisarla
+      } else {
+        flash = 1;
+        strikeTimer = 7 + Math.random() * 12;
+        setTimeout(() => playThunder(), 120 + Math.random() * 400);
+      }
     }
     flash = Math.max(0, flash - dt * 3.2);
     const flashK = flash > 0 ? flash * (0.55 + 0.45 * Math.abs(Math.sin(elapsed * 38))) : 0;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import config from "../tools/asset-gen/asset-gen.config.mjs";
 
-test("texture asset specs include dimensions for 3D targets", () => {
+test("texture asset specs include dimensions 3D targets", () => {
   const textureSpecs = config.assets.texture;
   assert.deepEqual(Object.keys(textureSpecs).sort(), [
     "ceilingSheet",
@@ -13,6 +13,7 @@ test("texture asset specs include dimensions for 3D targets", () => {
     "productVela",
     "taxistaCutout",
     "wallPlaster",
+    "windowMetal",
     "woodCounter",
   ]);
 
@@ -24,7 +25,7 @@ test("texture asset specs include dimensions for 3D targets", () => {
   }
 });
 
-test("taxista character spec includes animation and world placement", () => {
+test("taxista character spec animation world placement", () => {
   const spec = config.assets.character.taxistaWalk;
 
   assert.equal(spec.name, "taxista-walk");
@@ -33,4 +34,14 @@ test("taxista character spec includes animation and world placement", () => {
   assert.ok(spec.windowPositionMeters);
   assert.ok(spec.approachPathMeters);
   assert.match(spec.prompt, /Full-body human Taxista/);
+});
+
+test("wall and ceiling texture specs use local references", () => {
+  assert.equal(config.refs.brickWall, "tools/asset-gen/references/pared-ladrillo.jpg");
+  assert.equal(config.refs.rustyRoof, "tools/asset-gen/references/techo-chapa.jpg");
+  assert.equal(config.refs.serviceWindow, "tools/asset-gen/references/ventana.jpg");
+  assert.match(config.assets.texture.wallPlaster.prompt, /seamless/i);
+  assert.match(config.assets.texture.wallPlaster.prompt, /ladrillo|brick/i);
+  assert.match(config.assets.texture.ceilingSheet.prompt, /seamless/i);
+  assert.match(config.assets.texture.ceilingSheet.prompt, /chapa|corrugated/i);
 });

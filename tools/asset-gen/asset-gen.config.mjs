@@ -4,7 +4,11 @@ export default {
     size: "1024x1024",
   },
 
-  refs: {},
+  refs: {
+    brickWall: "tools/asset-gen/references/pared-ladrillo.jpg",
+    rustyRoof: "tools/asset-gen/references/techo-chapa.jpg",
+    serviceWindow: "tools/asset-gen/references/ventana.jpg",
+  },
 
   assets: {
     character: {
@@ -38,7 +42,7 @@ export default {
         objectDimensionsMeters: { x: 3.5, y: 2.6 },
         uvRepeat: { u: 2.5, v: 1.8 },
         prompt:
-          "Seamless square PBR-style albedo texture for interior kiosk walls, old yellowed plaster, humidity stains, repaired patches, warm fluorescent light, cozy horror mood, no text, no posters. Designed for PlayCanvas wall boxes around 3.5m wide by 2.6m high.",
+          "Seamless square PBR-style albedo texture interior kiosk wall made of exposed red ladrillo brick and broken old plaster patches, irregular boquete-like missing plaster areas, damp grime, cracked mortar, cozy horror mood, no text, no posters, no watermark, no perspective. Use the reference only for material direction; remove all stock-photo marks. Designed for PlayCanvas wall boxes around 3.5m wide by 2.6m high, repeated horizontally and vertically without obvious seams.",
       },
       ceilingSheet: {
         name: "ceiling-sheet",
@@ -46,7 +50,7 @@ export default {
         objectDimensionsMeters: { x: 3.5, z: 4.5 },
         uvRepeat: { u: 2.5, v: 3 },
         prompt:
-          "Seamless square PBR-style albedo texture for an old corrugated sheet-metal kiosk ceiling, deteriorated but cozy, rusty brown and dark green oxidation, water stains, old screws and seams, warm fluorescent light, no holes through the roof, no sky, no perspective. Designed for a PlayCanvas ceiling mesh about 3.5m wide by 4.5m deep.",
+          "Seamless square PBR-style albedo texture of old corrugated chapa sheet-metal kiosk ceiling, oxidada with orange rust streaks, dull galvanized silver patches, old screws, water stains, worn ribs, warm fluorescent light, no holes through roof, no sky, no text, no watermark, no perspective. Use the reference only for material direction; remove all stock-photo marks. Designed for PlayCanvas ceiling mesh about 3.5m wide by 4.5m deep, repeated without obvious seams.",
       },
       woodCounter: {
         name: "wood-counter",
@@ -55,6 +59,14 @@ export default {
         uvRepeat: { u: 2.4, v: 1 },
         prompt:
           "Seamless horizontal wood counter texture for a low-poly 3D kiosk counter and shelves, dark worn varnished wood, scratches, cup rings, old shop grime, warm light, no labels, no perspective. Designed for a 2.4m wide counter mesh and shelf boards.",
+      },
+      windowMetal: {
+        name: "window-metal",
+        maxSize: 512,
+        objectDimensionsMeters: { x: 1.28, y: 0.95 },
+        uvRepeat: { u: 1, v: 1 },
+        prompt:
+          "Seamless square PBR-style albedo texture dark oxidized metal for a kiosk service window frame and grate, blackened steel, orange rust in edges, scratches, dull worn paint, no text, no watermark, no perspective. Use reference only material direction; keep it tileable for thin PlayCanvas box bars.",
       },
       productCafe: {
         name: "product-cafe",
